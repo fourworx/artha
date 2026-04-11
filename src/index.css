@@ -1,0 +1,100 @@
+@import "tailwindcss";
+
+/* ─── Artha Design Tokens ─────────────────────────────────────── */
+:root {
+  /* Terminal palette */
+  --bg-base:       #0d0f12;
+  --bg-surface:    #13161b;
+  --bg-raised:     #1a1e25;
+  --border:        #2a2f3a;
+  --border-bright: #3d4455;
+  --text-primary:  #e2e8f0;
+  --text-muted:    #64748b;
+  --text-dim:      #3d4455;
+  --accent-blue:   #4a7fa5;
+  --accent-green:  #3d7a5e;
+  --accent-amber:  #8a6a2e;
+  --accent-red:    #7a3d3d;
+  --positive:      #4ade80;
+  --negative:      #f87171;
+  --warning:       #fbbf24;
+
+  /* Tier 1 (Piggy Bank) palette — warm & playful */
+  --t1-bg:        #fef9f0;
+  --t1-accent:    #f59e0b;
+  --t1-secondary: #fb923c;
+  --t1-text:      #1c1917;
+
+  font-family: 'JetBrains Mono', 'Fira Code', ui-monospace, monospace;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* ─── Base ────────────────────────────────────────────────────── */
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  overscroll-behavior: none;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  min-height: 100dvh;
+  max-width: 480px;
+  margin: 0 auto;
+  position: relative;
+}
+
+/* ─── Terminal progress bar ───────────────────────────────────── */
+.progress-bar {
+  font-family: 'JetBrains Mono', monospace;
+  letter-spacing: 0;
+}
+
+.progress-filled {
+  background-color: var(--accent-blue);
+}
+
+.progress-empty {
+  background-color: var(--bg-raised);
+  background-image: repeating-linear-gradient(
+    45deg,
+    transparent,
+    transparent 2px,
+    rgba(255,255,255,0.04) 2px,
+    rgba(255,255,255,0.04) 4px
+  );
+}
+
+/* ─── PIN pad ─────────────────────────────────────────────────── */
+.pin-dot {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  border: 1px solid var(--border-bright);
+  transition: background 0.15s;
+}
+
+.pin-dot.filled {
+  background: var(--text-primary);
+  border-color: var(--text-primary);
+}
+
+/* ─── Scrollbar ───────────────────────────────────────────────── */
+::-webkit-scrollbar { width: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* ─── Tap highlight off (mobile) ──────────────────────────────── */
+* { -webkit-tap-highlight-color: transparent; }
