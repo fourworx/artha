@@ -3,7 +3,6 @@ import Dexie from 'dexie'
 export const db = new Dexie('ArthaDB')
 
 db.version(1).stores({
-  // Primary key + indexed fields only (Dexie syntax)
   families:      '&id, name',
   members:       '&id, familyId, role, tier',
   chores:        '&id, familyId, type, isActive, *assignedTo',
@@ -12,6 +11,10 @@ db.version(1).stores({
   rewards:       '&id, familyId, isActive',
   payslips:      '&id, memberId, periodEnd',
   utilityCharges:'&id, memberId, date',
+})
+
+db.version(2).stores({
+  rewardRequests: '&id, memberId, rewardId, status',
 })
 
 export default db

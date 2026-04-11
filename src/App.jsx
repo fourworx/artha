@@ -15,13 +15,17 @@ import ChoreManager     from './views/parent/ChoreManager'
 import ApproveChores    from './views/parent/ApproveChores'
 import UtilityLogger    from './views/parent/UtilityLogger'
 import EconomicControls from './views/parent/EconomicControls'
+import RewardManager    from './views/parent/RewardManager'
+import TaxFund          from './views/parent/TaxFund'
 import More             from './views/parent/More'
 
 // Child Tier 2 views
 import Tier2Home  from './views/child-tier2/Home'
 import Chores     from './views/child-tier2/Chores'
+import Payslip    from './views/child-tier2/Payslip'
 import Savings    from './views/child-tier2/Savings'
 import GoalJar    from './views/child-tier2/GoalJar'
+import Rewards    from './views/child-tier2/Rewards'
 import History    from './views/child-tier2/History'
 
 // Child Tier 1
@@ -104,8 +108,8 @@ export default function App() {
               <Route path="more"     element={<More />} />
               <Route path="utilities" element={<UtilityLogger />} />
               <Route path="economy"  element={<EconomicControls />} />
-              <Route path="rewards"  element={<ComingSoon label="Reward Manager" />} />
-              <Route path="tax-fund" element={<ComingSoon label="Tax Fund" />} />
+              <Route path="rewards"  element={<RewardManager />} />
+              <Route path="tax-fund" element={<TaxFund />} />
               <Route path="backup"   element={<ComingSoon label="Backup & Restore" />} />
               <Route path="child/:memberId" element={<ComingSoon label="Child Detail" />} />
             </Route>
@@ -114,10 +118,10 @@ export default function App() {
             <Route path="/child" element={<Tier2Shell />}>
               <Route path="home"    element={<Tier2Home />} />
               <Route path="chores"  element={<Chores />} />
-              <Route path="payslip" element={<ComingSoon label="Payslip" />} />
+              <Route path="payslip" element={<Payslip />} />
               <Route path="savings" element={<Savings />} />
               <Route path="goal"    element={<GoalJar />} />
-              <Route path="rewards" element={<ComingSoon label="Rewards" />} />
+              <Route path="rewards" element={<Rewards />} />
               <Route path="history" element={<History />} />
             </Route>
 

@@ -101,7 +101,60 @@ export const addReward = (reward) => db.rewards.add(reward)
 
 export const updateReward = (id, changes) => db.rewards.update(id, changes)
 
+export const getAllRewards = (familyId) =>
+  db.rewards.where('familyId').equals(familyId).toArray()
+
 export const deleteReward = (id) => db.rewards.update(id, { isActive: false })
+
+// ── Reward Requests ───────────────────────────────────────────────────────────
+
+export const addRewardRequest = (req) =>
+  db.rewardRequests.add({
+    id: crypto.randomUUID(),
+    memberId:    req.memberId,
+    rewardId:    req.rewardId,
+    rewardTitle: req.rewardTitle,
+    amount:      req.amount,
+    status:      'pending',
+    requestedAt: Date.now(),
+    resolvedAt:  null,
+  })
+
+export const getRewardRequests = (memberId) =>
+  db.rewardRequests.where('memberId').equals(memberId).reverse().toArray()
+
+export const getPendingRewardRequests = (memberIds) =>
+  db.rewardRequests
+    .where('status').equals('pending')
+    .filter(r => memberIds.includes(r.memberId))
+    .toArray()
+
+export const rejectRewardRequest = (id) =>
+  db.rewardRequests.update(id, { status: 'rejected', resolvedAt: Date.now() })
+
+export async function approveRewardRequest(requestId, memberId, amount) {
+  const member = await getMember(memberId)
+  if (!member) throw new Error('Member not found')
+  if (member.accounts.spending < amount) throw new Error('Insufficient balance')
+
+  await db.transaction('rw', [db.rewardRequests, db.members, db.transactions], async () => {
+    await db.rewardRequests.update(requestId, { status: 'approved', resolvedAt: Date.now() })
+    await updateMemberAccounts(memberId, {
+      ...member.accounts,
+      spending: member.accounts.spending - amount,
+    })
+    const req = await db.rewardRequests.get(requestId)
+    await addTransaction({
+      id: crypto.randomUUID(),
+      memberId,
+      type: 'reward',
+      amount: -amount,
+      description: `Reward: ${req?.rewardTitle ?? 'Reward'}`,
+      date: new Date().toISOString().slice(0, 10),
+      relatedId: requestId,
+    })
+  })
+}
 
 // ── Payslips ─────────────────────────────────────────────────────────────────
 
@@ -136,7 +189,7 @@ export const addUtilityCharge = (charge) => db.utilityCharges.add(charge)
 // ── Data Export / Import (Backup & Restore) ──────────────────────────────────
 
 export async function exportAllData() {
-  const [families, members, chores, choreLogs, transactions, rewards, payslips, utilityCharges] =
+  const [families, members, chores, choreLogs, transactions, rewards, payslips, utilityCharges, rewardRequests] =
     await Promise.all([
       db.families.toArray(),
       db.members.toArray(),
@@ -146,35 +199,25 @@ export async function exportAllData() {
       db.rewards.toArray(),
       db.payslips.toArray(),
       db.utilityCharges.toArray(),
+      db.rewardRequests.toArray(),
     ])
 
   return {
     exportedAt: new Date().toISOString(),
-    version: 1,
-    families,
-    members,
-    chores,
-    choreLogs,
-    transactions,
-    rewards,
-    payslips,
-    utilityCharges,
+    version: 2,
+    families, members, chores, choreLogs, transactions,
+    rewards, payslips, utilityCharges, rewardRequests,
   }
 }
 
 export async function importAllData(data) {
   await db.transaction('rw',
-    [db.families, db.members, db.chores, db.choreLogs, db.transactions, db.rewards, db.payslips, db.utilityCharges],
+    [db.families, db.members, db.chores, db.choreLogs, db.transactions, db.rewards, db.payslips, db.utilityCharges, db.rewardRequests],
     async () => {
       await Promise.all([
-        db.families.clear(),
-        db.members.clear(),
-        db.chores.clear(),
-        db.choreLogs.clear(),
-        db.transactions.clear(),
-        db.rewards.clear(),
-        db.payslips.clear(),
-        db.utilityCharges.clear(),
+        db.families.clear(), db.members.clear(), db.chores.clear(),
+        db.choreLogs.clear(), db.transactions.clear(), db.rewards.clear(),
+        db.payslips.clear(), db.utilityCharges.clear(), db.rewardRequests.clear(),
       ])
       await Promise.all([
         db.families.bulkAdd(data.families),
@@ -185,6 +228,7 @@ export async function importAllData(data) {
         db.rewards.bulkAdd(data.rewards),
         db.payslips.bulkAdd(data.payslips),
         db.utilityCharges.bulkAdd(data.utilityCharges),
+        data.rewardRequests?.length ? db.rewardRequests.bulkAdd(data.rewardRequests) : Promise.resolve(),
       ])
     }
   )
