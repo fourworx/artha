@@ -28,9 +28,13 @@ export const updateMemberAccounts = (memberId, accounts) =>
 export const getChores = (familyId) =>
   db.chores.where('familyId').equals(familyId).toArray()
 
-export const addChore = (chore) => db.chores.add(chore)
+export const addChore = (chore) =>
+  db.chores.add({ id: crypto.randomUUID(), ...chore })
 
 export const updateChore = (id, changes) => db.chores.update(id, changes)
+
+export const toggleChoreActive = (id, current) =>
+  db.chores.update(id, { isActive: !current })
 
 export const deleteChore = (id) => db.chores.update(id, { isActive: false })
 
@@ -38,16 +42,9 @@ export const deleteChore = (id) => db.chores.update(id, { isActive: false })
 
 export const getChoreLogsForDate = (memberId, date) =>
   db.choreLogs
-    .where('[memberId+date]')
-    .equals([memberId, date])
+    .where('memberId').equals(memberId)
+    .filter(log => log.date === date)
     .toArray()
-    .catch(() =>
-      // Fallback if compound index not available
-      db.choreLogs
-        .where('memberId').equals(memberId)
-        .filter(log => log.date === date)
-        .toArray()
-    )
 
 export const getChoreLogsForPeriod = (memberId, startDate, endDate) =>
   db.choreLogs
@@ -55,10 +52,29 @@ export const getChoreLogsForPeriod = (memberId, startDate, endDate) =>
     .filter(log => log.date >= startDate && log.date <= endDate)
     .toArray()
 
-export const getPendingChoreLogs = (familyId) =>
-  db.choreLogs.where('status').equals('pending').toArray()
+/** All pending logs across a set of member IDs (for parent approval screen) */
+export const getPendingLogsForMembers = (memberIds) =>
+  db.choreLogs
+    .where('status').equals('pending')
+    .filter(log => memberIds.includes(log.memberId))
+    .toArray()
 
-export const addChoreLog = (log) => db.choreLogs.add(log)
+export const addChoreLog = (chore) =>
+  db.choreLogs.add({
+    id: crypto.randomUUID(),
+    choreId: chore.choreId,
+    memberId: chore.memberId,
+    date: chore.date,
+    status: 'pending',
+    completedAt: Date.now(),
+    approvedAt: null,
+  })
+
+export const approveChoreLog = (id) =>
+  db.choreLogs.update(id, { status: 'approved', approvedAt: Date.now() })
+
+export const rejectChoreLog = (id) =>
+  db.choreLogs.update(id, { status: 'rejected', approvedAt: Date.now() })
 
 export const updateChoreLog = (id, changes) => db.choreLogs.update(id, changes)
 

@@ -1,37 +1,90 @@
-import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom'
+import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
+import { useState, useEffect } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
-import { FamilyProvider } from './context/FamilyContext'
+import { FamilyProvider, useFamily } from './context/FamilyContext'
+import { getPendingLogsForMembers } from './db/operations'
+import ParentNav from './components/ParentNav'
+import ChildNav from './components/ChildNav'
+
+// Auth
 import PinAuth from './auth/PinAuth'
-import ParentDashboard from './views/parent/Dashboard'
-import Tier2Home from './views/child-tier2/Home'
+
+// Parent views
+import ParentDashboard  from './views/parent/Dashboard'
+import ChoreManager     from './views/parent/ChoreManager'
+import ApproveChores    from './views/parent/ApproveChores'
+import UtilityLogger    from './views/parent/UtilityLogger'
+import EconomicControls from './views/parent/EconomicControls'
+import More             from './views/parent/More'
+
+// Child Tier 2 views
+import Tier2Home  from './views/child-tier2/Home'
+import Chores     from './views/child-tier2/Chores'
+import Savings    from './views/child-tier2/Savings'
+import GoalJar    from './views/child-tier2/GoalJar'
+import History    from './views/child-tier2/History'
+
+// Child Tier 1
 import CoinJar from './views/child-tier1/CoinJar'
 
-// ── Route guard — redirect to login if not authenticated ──────────────────────
-function Protected({ children, allowedRoles, allowedTiers }) {
-  const { currentMember } = useAuth()
-
-  if (!currentMember) return <Navigate to="/" replace />
-
-  if (allowedRoles && !allowedRoles.includes(currentMember.role)) {
-    return <Navigate to="/" replace />
-  }
-
-  if (allowedTiers && !allowedTiers.includes(currentMember.tier)) {
-    return <Navigate to="/" replace />
-  }
-
-  return children
-}
-
-// ── Placeholder for screens being built in later sessions ─────────────────────
+// ── Placeholder ───────────────────────────────────────────────────────────────
 function ComingSoon({ label }) {
   return (
     <div className="flex items-center justify-center h-full">
       <p className="text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
-        {label} — coming in Session 2+
+        {label} — coming soon
       </p>
     </div>
   )
+}
+
+// ── Parent shell ──────────────────────────────────────────────────────────────
+function ParentShell() {
+  const { currentMember } = useAuth()
+  const { children } = useFamily()
+  const [pendingCount, setPendingCount] = useState(0)
+
+  useEffect(() => {
+    if (!children.length) return
+    const ids = children.map(c => c.id)
+    getPendingLogsForMembers(ids).then(logs => setPendingCount(logs.length))
+  }, [children])
+
+  if (!currentMember || currentMember.role !== 'parent') return <Navigate to="/" replace />
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
+        <Outlet />
+      </div>
+      <ParentNav pendingCount={pendingCount} />
+    </div>
+  )
+}
+
+// ── Tier 2 child shell ────────────────────────────────────────────────────────
+function Tier2Shell() {
+  const { currentMember } = useAuth()
+  if (!currentMember || currentMember.role !== 'child' || currentMember.tier < 2) {
+    return <Navigate to="/" replace />
+  }
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      <div style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
+        <Outlet />
+      </div>
+      <ChildNav />
+    </div>
+  )
+}
+
+// ── Tier 1 guard ──────────────────────────────────────────────────────────────
+function Tier1Guard() {
+  const { currentMember } = useAuth()
+  if (!currentMember || currentMember.role !== 'child' || currentMember.tier !== 1) {
+    return <Navigate to="/" replace />
+  }
+  return <CoinJar />
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -41,96 +94,36 @@ export default function App() {
       <FamilyProvider>
         <AuthProvider>
           <Routes>
-            {/* Login */}
             <Route path="/" element={<PinAuth />} />
 
             {/* Parent routes */}
-            <Route path="/parent" element={
-              <Protected allowedRoles={['parent']}>
-                <ParentDashboard />
-              </Protected>
-            } />
-            <Route path="/parent/chores" element={
-              <Protected allowedRoles={['parent']}>
-                <ComingSoon label="Chore Manager" />
-              </Protected>
-            } />
-            <Route path="/parent/approve" element={
-              <Protected allowedRoles={['parent']}>
-                <ComingSoon label="Approve Chores" />
-              </Protected>
-            } />
-            <Route path="/parent/utilities" element={
-              <Protected allowedRoles={['parent']}>
-                <ComingSoon label="Utility Logger" />
-              </Protected>
-            } />
-            <Route path="/parent/economy" element={
-              <Protected allowedRoles={['parent']}>
-                <ComingSoon label="Economic Controls" />
-              </Protected>
-            } />
-            <Route path="/parent/rewards" element={
-              <Protected allowedRoles={['parent']}>
-                <ComingSoon label="Reward Manager" />
-              </Protected>
-            } />
-            <Route path="/parent/tax-fund" element={
-              <Protected allowedRoles={['parent']}>
-                <ComingSoon label="Tax Fund" />
-              </Protected>
-            } />
-            <Route path="/parent/child/:memberId" element={
-              <Protected allowedRoles={['parent']}>
-                <ComingSoon label="Child Detail" />
-              </Protected>
-            } />
+            <Route path="/parent" element={<ParentShell />}>
+              <Route index           element={<ParentDashboard />} />
+              <Route path="chores"   element={<ChoreManager />} />
+              <Route path="approve"  element={<ApproveChores />} />
+              <Route path="more"     element={<More />} />
+              <Route path="utilities" element={<UtilityLogger />} />
+              <Route path="economy"  element={<EconomicControls />} />
+              <Route path="rewards"  element={<ComingSoon label="Reward Manager" />} />
+              <Route path="tax-fund" element={<ComingSoon label="Tax Fund" />} />
+              <Route path="backup"   element={<ComingSoon label="Backup & Restore" />} />
+              <Route path="child/:memberId" element={<ComingSoon label="Child Detail" />} />
+            </Route>
 
-            {/* Tier 1 child routes */}
-            <Route path="/child/jar" element={
-              <Protected allowedRoles={['child']} allowedTiers={[1]}>
-                <CoinJar />
-              </Protected>
-            } />
+            {/* Tier 2+ child routes */}
+            <Route path="/child" element={<Tier2Shell />}>
+              <Route path="home"    element={<Tier2Home />} />
+              <Route path="chores"  element={<Chores />} />
+              <Route path="payslip" element={<ComingSoon label="Payslip" />} />
+              <Route path="savings" element={<Savings />} />
+              <Route path="goal"    element={<GoalJar />} />
+              <Route path="rewards" element={<ComingSoon label="Rewards" />} />
+              <Route path="history" element={<History />} />
+            </Route>
 
-            {/* Tier 2 child routes */}
-            <Route path="/child/home" element={
-              <Protected allowedRoles={['child']} allowedTiers={[2, 3, 4]}>
-                <Tier2Home />
-              </Protected>
-            } />
-            <Route path="/child/chores" element={
-              <Protected allowedRoles={['child']} allowedTiers={[2, 3, 4]}>
-                <ComingSoon label="Chores" />
-              </Protected>
-            } />
-            <Route path="/child/payslip" element={
-              <Protected allowedRoles={['child']} allowedTiers={[2, 3, 4]}>
-                <ComingSoon label="Payslip" />
-              </Protected>
-            } />
-            <Route path="/child/savings" element={
-              <Protected allowedRoles={['child']} allowedTiers={[2, 3, 4]}>
-                <ComingSoon label="Savings" />
-              </Protected>
-            } />
-            <Route path="/child/goal" element={
-              <Protected allowedRoles={['child']} allowedTiers={[2, 3, 4]}>
-                <ComingSoon label="Goal Jar" />
-              </Protected>
-            } />
-            <Route path="/child/rewards" element={
-              <Protected allowedRoles={['child']} allowedTiers={[2, 3, 4]}>
-                <ComingSoon label="Rewards" />
-              </Protected>
-            } />
-            <Route path="/child/history" element={
-              <Protected allowedRoles={['child']} allowedTiers={[2, 3, 4]}>
-                <ComingSoon label="History" />
-              </Protected>
-            } />
+            {/* Tier 1 */}
+            <Route path="/child/jar" element={<Tier1Guard />} />
 
-            {/* Fallback */}
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AuthProvider>
