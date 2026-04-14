@@ -1,7 +1,71 @@
 ---
-name: Artha — Session 10 Handoff
-description: Full current state after sessions 1–10; use to resume in next session
+name: Artha — Session 11 Handoff
+description: Full current state after sessions 1–11; use to resume in next session
 type: project
+---
+
+## Session 11 completed (2026-04-14)
+
+### Features built
+
+**Philanthropy request flow — child side (GoalJar.jsx → Goals screen)**
+- Philanthropy balance shown at top
+- Sub-goals list with progress bars (name, balance/target, %)
+- **DonateSheet**: child enters charity name + amount → `addMemberRequest({ type: 'donation', ... })`
+- **WithdrawSheet**: child enters amount, picks destination (Spending / Philanthropy / Another goal), optional "delete goal" → `addMemberRequest({ type: 'subgoal_withdrawal', ... })`
+- Both submit to `member_requests` table, no immediate balance change — requires parent approval
+
+**member_requests DB operations (operations.js)**
+- `addMemberRequest(req)` — insert into `member_requests` table
+- `getPendingMemberRequests(memberIds)` — fetch pending by member IDs
+- `resolveMemberRequest(id, status)` — set status to 'approved' or 'denied'
+- `performDonation` (internal) — deducts philanthropy balance, logs transaction
+- `approveDonation(requestId, memberId, amount, charityName)` — exported; resolves + performs
+- `parentDonate(memberId, amount, charityName)` — parent-direct, no request queue
+- `performSubGoalWithdrawal` (internal) — handles all destinations (spending / philanthropy / subgoal), delete-goal logic
+- `approveSubGoalWithdrawal(requestId, memberId, amount, metadata)` — exported
+- `parentSubGoalWithdrawal(memberId, amount, metadata)` — parent-direct, no request queue
+- `mapMemberRequest(row)` — camelCase mapper for member_requests rows
+
+**Philanthropy requests — parent approval (ApproveChores.jsx)**
+- New `PHILANTHROPY REQUESTS` section at bottom of Approvals screen
+- Loads pending `donation` and `subgoal_withdrawal` requests alongside chore/reward queues
+- Donation cards: Heart icon, charity name, amount, philanthropy balance check
+- Sub-goal withdrawal cards: Target icon, goal name, amount, destination label, balance check, delete-goal indicator
+- Approve: calls `approveDonation` or `approveSubGoalWithdrawal` (updates balances + logs tx)
+- Deny: calls `resolveMemberRequest('denied')` — no balance change
+- Nav badge count (App.jsx) now includes pending member requests
+
+**Parent-direct donate / withdraw (ChildDetail.jsx)**
+- Philanthropy row with balance + **Donate** button (shown when philanthropy > 0)
+  - Bottom sheet: charity name + amount → `parentDonate()` immediately, no queue
+- Sub-goals section below balance tiles (each goal shows name, balance/target, %)
+  - **Withdraw** button per goal → bottom sheet with amount, destination picker (Spending / Philanthropy / Another Goal with dropdown), delete-goal toggle → `parentSubGoalWithdrawal()` immediately
+
+**member_requests Supabase table** (created by user via SQL)
+```sql
+create table member_requests (
+  id uuid primary key default gen_random_uuid(),
+  family_id text not null,
+  member_id text not null,
+  type text not null,           -- 'donation' | 'subgoal_withdrawal'
+  status text default 'pending', -- 'pending' | 'approved' | 'denied'
+  amount numeric not null,
+  description text,
+  metadata jsonb,
+  requested_at bigint,
+  resolved_at bigint
+);
+```
+
+**Route map update**
+- `/child/goal` → Goals screen (philanthropy + sub-goals, not GoalJar)
+- `/child/history` → redirects to `/child/ledger`
+- `/parent/child/:memberId` → ChildDetail (tappable from dashboard child cards)
+
+**Nav badge**
+- `App.jsx` ParentShell: badge = `chore_logs.pending + member_requests.pending`
+
 ---
 
 ## Session 10 decisions (2026-04-14)
@@ -359,25 +423,27 @@ Implementation:
 ## Route map
 
 ```
-/parent              ParentDashboard
-/parent/approve      ApproveChores
-/parent/chores       ChoreManager
-/parent/members      Members
-/parent/loans        Loans
-/parent/more         More
-/parent/utilities    UtilityLogger
-/parent/economy      EconomicControls
-/parent/rewards      RewardManager
-/parent/tax-fund     TaxFund
-/parent/backup       Backup
-/child/home          Tier2Home
-/child/chores        Chores
-/child/payslip       Payslip
-/child/savings       Savings
-/child/goal          GoalJar
-/child/rewards       Rewards
-/child/history       History
-/child/jar           CoinJar (Tier 1)
+/parent                    ParentDashboard
+/parent/approve            ApproveChores  (chores + rewards + philanthropy requests)
+/parent/chores             ChoreManager
+/parent/members            Members
+/parent/loans              Loans
+/parent/more               More
+/parent/utilities          UtilityLogger
+/parent/economy            EconomicControls
+/parent/rewards            RewardManager
+/parent/tax-fund           TaxFund
+/parent/backup             Backup
+/parent/child/:memberId    ChildDetail
+/child/home                Tier2Home
+/child/chores              Chores
+/child/ledger              Ledger  (payslips + transaction history)
+/child/payslip             → redirects to /child/ledger
+/child/savings             Savings
+/child/goal                Goals (philanthropy + sub-goals)
+/child/rewards             Rewards
+/child/history             → redirects to /child/ledger
+/child/jar                 CoinJar (Tier 1)
 ```
 
 ---
