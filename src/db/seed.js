@@ -1,18 +1,25 @@
-import { db } from './schema'
+import { supabase } from './supabase'
 import { DEFAULT_CONFIG, FAMILY_ID } from '../utils/constants'
 import { hashPin } from '../auth/pinUtils'
-import { today } from '../utils/dates'
 
 /**
- * Seeds the database with Dev's family data.
- * Called once on first launch if no family exists.
+ * Seeds the Supabase database with Dev's family data.
+ * Called once on first launch if no family row exists.
  *
  * PINs below are placeholders — change them in the app after first login.
  * Parent PIN: 0000  |  Son PIN: 1111  |  Daughter PIN: 2222
  */
 export async function seedFamily() {
-  const existing = await db.families.get(FAMILY_ID)
-  if (existing) return // Already seeded
+  // Check if members already exist (more reliable than checking family)
+  const { count } = await supabase
+    .from('members')
+    .select('id', { count: 'exact', head: true })
+    .eq('family_id', FAMILY_ID)
+
+  if (count > 0) return // Already seeded
+
+  // Remove any partial family row from a previous failed seed
+  await supabase.from('families').delete().eq('id', FAMILY_ID)
 
   const [parentPin, sonPin, daughterPin] = await Promise.all([
     hashPin('0000'),
@@ -21,179 +28,175 @@ export async function seedFamily() {
   ])
 
   // ── Family ──────────────────────────────────────────────────────
-  await db.families.add({
-    id: FAMILY_ID,
-    name: "Dev's Family",
-    config: { ...DEFAULT_CONFIG },
-    taxFundBalance: 0,
-    taxFundHistory: [],
-    createdAt: Date.now(),
+  const { error: famErr } = await supabase.from('families').insert({
+    id:               FAMILY_ID,
+    name:             "Dev's Family",
+    config:           { ...DEFAULT_CONFIG },
+    tax_fund_balance: 0,
+    tax_fund_history: [],
   })
+  if (famErr) throw new Error(`families insert: ${famErr.message}`)
 
   // ── Members ─────────────────────────────────────────────────────
-  const members = [
+  const { error: memErr } = await supabase.from('members').insert([
     {
-      id: 'member-dev',
-      familyId: FAMILY_ID,
-      name: 'Dev',
-      role: 'parent',
-      tier: null,
-      pin: parentPin,
-      avatar: '👨',
-      baseSalary: 0,
-      accounts: { spending: 0, savings: 0, goalJar: null },
-      creditScore: 500,
-      createdAt: Date.now(),
+      id:           'member-dev',
+      family_id:    FAMILY_ID,
+      name:         'Dev',
+      role:         'parent',
+      tier:         null,
+      pin:     parentPin,
+      avatar:       '👨',
+      base_salary:  0,
+      accounts:     { spending: 0, savings: 0, goalJar: null },
+      credit_score: 500,
     },
     {
-      id: 'member-spouse',
-      familyId: FAMILY_ID,
-      name: 'Spouse',
-      role: 'parent',
-      tier: null,
-      pin: parentPin,
-      avatar: '👩',
-      baseSalary: 0,
-      accounts: { spending: 0, savings: 0, goalJar: null },
-      creditScore: 500,
-      createdAt: Date.now(),
+      id:           'member-spouse',
+      family_id:    FAMILY_ID,
+      name:         'Spouse',
+      role:         'parent',
+      tier:         null,
+      pin:     parentPin,
+      avatar:       '👩',
+      base_salary:  0,
+      accounts:     { spending: 0, savings: 0, goalJar: null },
+      credit_score: 500,
     },
     {
-      id: 'member-son',
-      familyId: FAMILY_ID,
-      name: 'Son',
-      role: 'child',
-      tier: 2,
-      pin: sonPin,
-      avatar: '👦',
-      baseSalary: 200,
-      accounts: {
+      id:           'member-son',
+      family_id:    FAMILY_ID,
+      name:         'Son',
+      role:         'child',
+      tier:         2,
+      pin:     sonPin,
+      avatar:       '👦',
+      base_salary:  200,
+      accounts:     {
         spending: 0,
-        savings: 0,
-        goalJar: { name: 'Lego Set', target: 700, balance: 0 },
+        savings:  0,
+        goalJar:  { name: 'Lego Set', target: 700, balance: 0 },
       },
-      creditScore: 500,
-      createdAt: Date.now(),
+      credit_score: 500,
     },
     {
-      id: 'member-daughter',
-      familyId: FAMILY_ID,
-      name: 'Daughter',
-      role: 'child',
-      tier: 1,
-      pin: daughterPin,
-      avatar: '👧',
-      baseSalary: 100,
-      accounts: {
+      id:           'member-daughter',
+      family_id:    FAMILY_ID,
+      name:         'Daughter',
+      role:         'child',
+      tier:         1,
+      pin:     daughterPin,
+      avatar:       '👧',
+      base_salary:  100,
+      accounts:     {
         spending: 0,
-        savings: 0,
-        goalJar: { name: 'Doll House', target: 500, balance: 0 },
+        savings:  0,
+        goalJar:  { name: 'Doll House', target: 500, balance: 0 },
       },
-      creditScore: 500,
-      createdAt: Date.now(),
+      credit_score: 500,
     },
-  ]
-  await db.members.bulkAdd(members)
+  ])
+  if (memErr) throw new Error(`members insert: ${memErr.message}`)
 
   // ── Mandatory Chores — Son ───────────────────────────────────────
   const sonMandatory = [
-    { title: 'Morning Prayer',                   recurrence: 'daily'   },
-    { title: 'Drink Holy Ganga Jal',             recurrence: 'daily'   },
-    { title: 'Make own bed',                     recurrence: 'daily'   },
-    { title: 'Pack bag for tomorrow',            recurrence: 'weekday' },
-    { title: 'Brush teeth (night)',              recurrence: 'daily'   },
-    { title: 'Eat Triphala',                     recurrence: 'daily'   },
-    { title: 'Reset shoes',                      recurrence: 'daily'   },
-    { title: 'Reset living room',                recurrence: 'daily'   },
-    { title: 'Guitar practice 20 min',           recurrence: 'daily'   },
-    { title: 'Tell something good that happened today', recurrence: 'daily' },
-    { title: 'Touch elders\' feet',              recurrence: 'daily'   },
+    { title: 'Morning Prayer',                         recurrence: 'daily'   },
+    { title: 'Drink Holy Ganga Jal',                   recurrence: 'daily'   },
+    { title: 'Make own bed',                           recurrence: 'daily'   },
+    { title: 'Pack bag for tomorrow',                  recurrence: 'weekday' },
+    { title: 'Brush teeth (night)',                    recurrence: 'daily'   },
+    { title: 'Eat Triphala',                           recurrence: 'daily'   },
+    { title: 'Reset shoes',                            recurrence: 'daily'   },
+    { title: 'Reset living room',                      recurrence: 'daily'   },
+    { title: 'Guitar practice 20 min',                 recurrence: 'daily'   },
+    { title: 'Tell something good that happened today', recurrence: 'daily'  },
+    { title: "Touch elders' feet",                     recurrence: 'daily'   },
   ]
 
   // ── Mandatory Chores — Daughter ──────────────────────────────────
   const daughterMandatory = [
-    { title: 'Morning Prayer',        recurrence: 'daily' },
-    { title: 'Drink Holy Ganga Jal',  recurrence: 'daily' },
-    { title: 'Make own bed',          recurrence: 'daily' },
-    { title: 'Brush teeth (night)',   recurrence: 'daily' },
-    { title: 'Touch elders\' feet',   recurrence: 'daily' },
+    { title: 'Morning Prayer',       recurrence: 'daily' },
+    { title: 'Drink Holy Ganga Jal', recurrence: 'daily' },
+    { title: 'Make own bed',         recurrence: 'daily' },
+    { title: 'Brush teeth (night)',  recurrence: 'daily' },
+    { title: "Touch elders' feet",   recurrence: 'daily' },
   ]
 
   const mandatoryChores = [
     ...sonMandatory.map((c, i) => ({
-      id: `chore-son-m-${i}`,
-      familyId: FAMILY_ID,
-      title: c.title,
-      type: 'mandatory',
-      value: 0,
-      recurrence: c.recurrence,
-      daysPerWeek: null,
-      assignedTo: ['member-son'],
-      isActive: true,
+      id:            `chore-son-m-${i}`,
+      family_id:     FAMILY_ID,
+      title:         c.title,
+      type:          'mandatory',
+      value:         0,
+      recurrence:    c.recurrence,
+      days_per_week: null,
+      assigned_to:   ['member-son'],
+      is_active:     true,
     })),
     ...daughterMandatory.map((c, i) => ({
-      id: `chore-daughter-m-${i}`,
-      familyId: FAMILY_ID,
-      title: c.title,
-      type: 'mandatory',
-      value: 0,
-      recurrence: c.recurrence,
-      daysPerWeek: null,
-      assignedTo: ['member-daughter'],
-      isActive: true,
+      id:            `chore-daughter-m-${i}`,
+      family_id:     FAMILY_ID,
+      title:         c.title,
+      type:          'mandatory',
+      value:         0,
+      recurrence:    c.recurrence,
+      days_per_week: null,
+      assigned_to:   ['member-daughter'],
+      is_active:     true,
     })),
   ]
 
-  // ── Bonus Chores (available to both) ────────────────────────────
+  // ── Bonus Chores ────────────────────────────────────────────────
   const bonusChores = [
-    { title: 'Mop kitchen',           value: 15, recurrence: 'weekend', daysPerWeek: null },
-    { title: 'Mop entire house',      value: 30, recurrence: 'weekend', daysPerWeek: null },
-    { title: 'Water plants',          value: 10, recurrence: 'weekend', daysPerWeek: null },
-    { title: 'Clean car inside',      value: 20, recurrence: 'weekend', daysPerWeek: null },
-    { title: 'Reset study table & room', value: 15, recurrence: 'weekend', daysPerWeek: null },
-    { title: 'No Sweet Day',          value: 20, recurrence: 'daily',   daysPerWeek: null },
-    { title: 'No Junk Food Day',      value: 10, recurrence: 'daily',   daysPerWeek: null },
-    { title: 'Learn 3 new words',     value: 15, recurrence: 'weekly',  daysPerWeek: null },
-    { title: 'French practice 30 min', value: 12, recurrence: 'custom', daysPerWeek: 3   },
-    { title: 'Tennis coaching (attended)', value: 10, recurrence: 'weekday', daysPerWeek: null },
+    { title: 'Mop kitchen',              value: 15,  recurrence: 'weekend', days_per_week: null },
+    { title: 'Mop entire house',         value: 30,  recurrence: 'weekend', days_per_week: null },
+    { title: 'Water plants',             value: 10,  recurrence: 'weekend', days_per_week: null },
+    { title: 'Clean car inside',         value: 20,  recurrence: 'weekend', days_per_week: null },
+    { title: 'Reset study table & room', value: 15,  recurrence: 'weekend', days_per_week: null },
+    { title: 'No Sweet Day',             value: 20,  recurrence: 'daily',   days_per_week: null },
+    { title: 'No Junk Food Day',         value: 10,  recurrence: 'daily',   days_per_week: null },
+    { title: 'Learn 3 new words',        value: 15,  recurrence: 'weekly',  days_per_week: null },
+    { title: 'French practice 30 min',   value: 12,  recurrence: 'custom',  days_per_week: 3   },
+    { title: 'Tennis coaching (attended)', value: 10, recurrence: 'weekday', days_per_week: null },
   ].map((c, i) => ({
-    id: `chore-bonus-${i}`,
-    familyId: FAMILY_ID,
-    title: c.title,
-    type: 'bonus',
-    value: c.value,
-    recurrence: c.recurrence,
-    daysPerWeek: c.daysPerWeek,
-    assignedTo: [], // empty = available to all children
-    isActive: true,
+    id:            `chore-bonus-${i}`,
+    family_id:     FAMILY_ID,
+    title:         c.title,
+    type:          'bonus',
+    value:         c.value,
+    recurrence:    c.recurrence,
+    days_per_week: c.days_per_week,
+    assigned_to:   [],
+    is_active:     true,
   }))
 
-  await db.chores.bulkAdd([...mandatoryChores, ...bonusChores])
+  await supabase.from('chores').insert([...mandatoryChores, ...bonusChores])
 
   // ── Rewards ──────────────────────────────────────────────────────
   const rewards = [
-    { title: '30 min Screen Time',  price: 15,   category: 'screen_time', emoji: '📱' },
-    { title: '60 min Screen Time',  price: 25,   category: 'screen_time', emoji: '📺' },
-    { title: 'Candy Bar',           price: 20,   category: 'treat',       emoji: '🍫' },
-    { title: 'Chips',               price: 20,   category: 'treat',       emoji: '🥨' },
-    { title: 'Ice Cream',           price: 30,   category: 'treat',       emoji: '🍦' },
-    { title: 'Boba Drink',          price: 40,   category: 'treat',       emoji: '🧋' },
-    { title: 'Starbucks / Café visit', price: 60, category: 'experience', emoji: '☕' },
-    { title: 'Movie in Theatre',    price: 150,  category: 'experience',  emoji: '🎬' },
-    { title: 'New Clothes',         price: 200,  category: 'material',    emoji: '👕' },
-    { title: 'One Day Car Trip',    price: 300,  category: 'experience',  emoji: '🚗' },
-    { title: 'Live Sporting Event', price: 450,  category: 'experience',  emoji: '🏏' },
-    { title: 'Lego Toy (small)',    price: 700,  category: 'material',    emoji: '🧱' },
-    { title: 'Lego Toy (large)',    price: 1200, category: 'material',    emoji: '🏗️' },
-    { title: 'Beach Vacation',      price: 2000, category: 'experience',  emoji: '🏖️' },
+    { title: '30 min Screen Time',      cost: 15,   category: 'screen_time', emoji: '📱' },
+    { title: '60 min Screen Time',      cost: 25,   category: 'screen_time', emoji: '📺' },
+    { title: 'Candy Bar',               cost: 20,   category: 'treat',       emoji: '🍫' },
+    { title: 'Chips',                   cost: 20,   category: 'treat',       emoji: '🥨' },
+    { title: 'Ice Cream',               cost: 30,   category: 'treat',       emoji: '🍦' },
+    { title: 'Boba Drink',              cost: 40,   category: 'treat',       emoji: '🧋' },
+    { title: 'Starbucks / Café visit',  cost: 60,   category: 'experience',  emoji: '☕' },
+    { title: 'Movie in Theatre',        cost: 150,  category: 'experience',  emoji: '🎬' },
+    { title: 'New Clothes',             cost: 200,  category: 'material',    emoji: '👕' },
+    { title: 'One Day Car Trip',        cost: 300,  category: 'experience',  emoji: '🚗' },
+    { title: 'Live Sporting Event',     cost: 450,  category: 'experience',  emoji: '🏏' },
+    { title: 'Lego Toy (small)',        cost: 700,  category: 'material',    emoji: '🧱' },
+    { title: 'Lego Toy (large)',        cost: 1200, category: 'material',    emoji: '🏗️' },
+    { title: 'Beach Vacation',          cost: 2000, category: 'experience',  emoji: '🏖️' },
   ].map((r, i) => ({
-    id: `reward-${i}`,
-    familyId: FAMILY_ID,
+    id:        `reward-${i}`,
+    family_id: FAMILY_ID,
     ...r,
-    isActive: true,
+    is_active: true,
   }))
 
-  await db.rewards.bulkAdd(rewards)
+  await supabase.from('rewards').insert(rewards)
 
-  console.log('[Artha] Family seeded successfully.')
+  console.log('[Artha] Family seeded into Supabase successfully.')
 }

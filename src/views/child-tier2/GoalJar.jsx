@@ -1,12 +1,14 @@
 import { useState } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { updateMemberAccounts, addTransaction } from '../../db/operations'
-import { formatRupees, roundRupees } from '../../utils/currency'
+import { roundRupees } from '../../utils/currency'
+import { useCurrency } from '../../context/FamilyContext'
 import { today } from '../../utils/dates'
 import { Target, Plus } from 'lucide-react'
 
 export default function GoalJar() {
   const { currentMember, refreshMember } = useAuth()
+  const fmt = useCurrency()
   const goalJar  = currentMember?.accounts?.goalJar
   const spending = currentMember?.accounts?.spending ?? 0
 
@@ -22,7 +24,7 @@ export default function GoalJar() {
   const handleDeposit = async () => {
     const amt = roundRupees(Number(depositAmount))
     if (!amt || amt <= 0) { setError('Enter a valid amount'); return }
-    if (amt > spending)   { setError(`Not enough in spending wallet (${formatRupees(spending)})`); return }
+    if (amt > spending)   { setError(`Not enough in spending wallet (${fmt(spending)})`); return }
 
     setSaving(true)
     setError('')
@@ -91,10 +93,10 @@ export default function GoalJar() {
 
           <div className="text-center">
             <p className="text-xl font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
-              {formatRupees(balance)} <span className="text-sm font-normal" style={{ color: 'var(--text-muted)' }}>of {formatRupees(target)}</span>
+              {fmt(balance)} <span className="text-sm font-normal" style={{ color: 'var(--text-muted)' }}>of {fmt(target)}</span>
             </p>
             <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
-              {remaining > 0 ? `${formatRupees(remaining)} to go` : '🎉 Goal reached!'}
+              {remaining > 0 ? `${fmt(remaining)} to go` : '🎉 Goal reached!'}
             </p>
           </div>
         </div>
@@ -106,7 +108,7 @@ export default function GoalJar() {
             <div className="flex items-center justify-between">
               <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>ADD TO JAR</p>
               <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-                Wallet: {formatRupees(spending)}
+                Wallet: {fmt(spending)}
               </p>
             </div>
             <div className="flex gap-2">
@@ -119,7 +121,7 @@ export default function GoalJar() {
                     color: depositAmount === String(v) ? '#000' : 'var(--text-muted)',
                     opacity: v > spending ? 0.4 : 1,
                   }}>
-                  ₹{v}
+                  {fmt(v)}
                 </button>
               ))}
             </div>
@@ -141,7 +143,7 @@ export default function GoalJar() {
                 color: !depositAmount ? 'var(--text-dim)' : 'var(--warning)',
               }}>
               <Plus size={16} />
-              {saving ? 'Adding...' : `Add ${depositAmount ? formatRupees(Number(depositAmount)) : '—'}`}
+              {saving ? 'Adding...' : `Add ${depositAmount ? fmt(Number(depositAmount)) : '—'}`}
             </button>
           </div>
         )}

@@ -1,12 +1,14 @@
 import { useNavigate } from 'react-router-dom'
-import { Zap, SlidersHorizontal, Gift, Landmark, Download } from 'lucide-react'
+import { Zap, SlidersHorizontal, Gift, Landmark, Download, Users, HandCoins } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
 const items = [
+  { icon: Users,            label: 'Family Members',    sub: 'Edit names, PINs, add children',  to: '/parent/members'   },
+  { icon: HandCoins,        label: 'Loans',             sub: 'Active loans, interest, payoff',  to: '/parent/loans'     },
   { icon: Zap,              label: 'Utility Logger',    sub: 'Log electricity, water charges',  to: '/parent/utilities' },
   { icon: SlidersHorizontal,label: 'Economic Controls', sub: 'Tax, rent, interest, auto-save',  to: '/parent/economy'   },
-  { icon: Gift,             label: 'Reward Manager',    sub: 'Add & price rewards',             to: '/parent/rewards',  soon: false },
-  { icon: Landmark,         label: 'Tax Fund',          sub: 'Family tax balance & spending',   to: '/parent/tax-fund', soon: false },
+  { icon: Gift,             label: 'Reward Manager',    sub: 'Add & price rewards',             to: '/parent/rewards'   },
+  { icon: Landmark,         label: 'Tax Fund',          sub: 'Family tax balance & spending',   to: '/parent/tax-fund'  },
   { icon: Download,         label: 'Backup & Restore',  sub: 'Export / import family data',     to: '/parent/backup'    },
 ]
 

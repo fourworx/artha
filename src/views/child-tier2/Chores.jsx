@@ -5,7 +5,19 @@ import { useFamily } from '../../context/FamilyContext'
 import { getChoreLogsForDate, addChoreLog } from '../../db/operations'
 import { getDueChoresForMember, getAvailableBonusChores, buildLogMap } from '../../engine/chores'
 import { today, displayDate } from '../../utils/dates'
-import { formatRupees } from '../../utils/currency'
+import { useCurrency } from '../../context/FamilyContext'
+
+// Expected completions per week for a chore
+function weeklyFreq(chore) {
+  switch (chore.recurrence) {
+    case 'daily':   return 7
+    case 'weekday': return 5
+    case 'weekend': return 2
+    case 'weekly':  return 1
+    case 'custom':  return chore.daysPerWeek ?? 3
+    default:        return 0
+  }
+}
 
 // ── Status icon ───────────────────────────────────────────────────────────────
 function StatusIcon({ status }) {
@@ -16,7 +28,8 @@ function StatusIcon({ status }) {
 }
 
 // ── Mandatory chore row ───────────────────────────────────────────────────────
-function MandatoryRow({ chore, log, onMark, marking }) {
+function MandatoryRow({ chore, log, worth, onMark, marking }) {
+  const fmt = useCurrency()
   const status = log?.status ?? null
   const canMark = !status || status === 'rejected'
   const isMarking = marking === chore.id
@@ -35,16 +48,24 @@ function MandatoryRow({ chore, log, onMark, marking }) {
         }}>
           {chore.title}
         </p>
-        {status === 'pending' && (
-          <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--warning)' }}>
-            Waiting for approval
-          </p>
-        )}
-        {status === 'rejected' && (
-          <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--negative)' }}>
-            Rejected — try again
-          </p>
-        )}
+        <div className="flex items-center gap-2 mt-0.5">
+          {worth > 0 && status === 'approved' && (
+            <span className="text-xs font-mono" style={{ color: 'var(--positive)' }}>
+              ✓ +{fmt(worth)}
+            </span>
+          )}
+          {worth > 0 && status !== 'approved' && (
+            <span className="text-xs font-mono" style={{ color: status === 'pending' ? 'var(--text-dim)' : 'var(--text-muted)' }}>
+              +{fmt(worth)}
+            </span>
+          )}
+          {status === 'pending' && (
+            <span className="text-xs font-mono" style={{ color: 'var(--warning)' }}>· waiting</span>
+          )}
+          {status === 'rejected' && (
+            <span className="text-xs font-mono" style={{ color: 'var(--negative)' }}>· rejected — try again</span>
+          )}
+        </div>
       </div>
       {canMark && (
         <button
@@ -65,6 +86,7 @@ function MandatoryRow({ chore, log, onMark, marking }) {
 
 // ── Bonus chore row ───────────────────────────────────────────────────────────
 function BonusRow({ chore, log, onClaim, claiming }) {
+  const fmt = useCurrency()
   const status = log?.status ?? null
   const isClaiming = claiming === chore.id
 
@@ -80,7 +102,7 @@ function BonusRow({ chore, log, onClaim, claiming }) {
           {chore.title}
         </p>
         <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--positive)' }}>
-          {formatRupees(chore.value)} bonus
+          {fmt(chore.value)} bonus
         </p>
       </div>
       {!status && (
@@ -109,7 +131,7 @@ function BonusRow({ chore, log, onClaim, claiming }) {
 // ── Main screen ───────────────────────────────────────────────────────────────
 export default function Chores() {
   const { currentMember } = useAuth()
-  const { chores: allChores } = useFamily()
+  const { chores: allChores, reloadCount } = useFamily()
 
   const [logMap, setLogMap]     = useState({})
   const [loading, setLoading]   = useState(true)
@@ -121,6 +143,15 @@ export default function Chores() {
   const dueChores   = getDueChoresForMember(allChores, currentMember?.id ?? '')
   const bonusChores = getAvailableBonusChores(allChores, currentMember?.id ?? '')
 
+  // Per-completion value: salary divided proportionally by weekly frequency
+  const allMandatory = allChores.filter(c =>
+    c.type === 'mandatory' && c.isActive && c.assignedTo.includes(currentMember?.id ?? '')
+  )
+  const totalWeeklyExpected = allMandatory.reduce((s, c) => s + weeklyFreq(c), 0)
+  const perCompletion = totalWeeklyExpected > 0
+    ? Math.round((currentMember?.baseSalary ?? 0) / totalWeeklyExpected)
+    : 0
+
   const loadLogs = useCallback(async () => {
     if (!currentMember) return
     const logs = await getChoreLogsForDate(currentMember.id, dateStr)
@@ -128,7 +159,7 @@ export default function Chores() {
     setLoading(false)
   }, [currentMember, dateStr])
 
-  useEffect(() => { loadLogs() }, [loadLogs])
+  useEffect(() => { loadLogs() }, [loadLogs, reloadCount])
 
   const handleMark = async (chore) => {
     setMarking(chore.id)
@@ -203,6 +234,7 @@ export default function Chores() {
                     key={chore.id}
                     chore={chore}
                     log={logMap[chore.id]}
+                    worth={perCompletion}
                     onMark={handleMark}
                     marking={marking}
                   />

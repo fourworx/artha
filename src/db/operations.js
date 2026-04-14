@@ -1,235 +1,1016 @@
-import { db } from './schema'
+import { supabase } from './supabase'
 import { today } from '../utils/dates'
+
+// ── Row mappers (DB snake_case → JS camelCase) ────────────────────────────────
+
+function mapFamily(row) {
+  if (!row) return null
+  return {
+    id:               row.id,
+    name:             row.name,
+    config:           row.config,
+    taxFundBalance:   row.tax_fund_balance,
+    taxFundHistory:   row.tax_fund_history,
+  }
+}
+
+function mapMember(row) {
+  if (!row) return null
+  return {
+    id:                     row.id,
+    familyId:               row.family_id,
+    name:                   row.name,
+    avatar:                 row.avatar,
+    tier:                   row.tier,
+    role:                   row.role,
+    pin:                    row.pin,
+    baseSalary:             row.base_salary,
+    accounts:               row.accounts,
+    config:                 row.config,
+    creditScore:            row.credit_score,
+    lastCreditPopupPeriod:  row.last_credit_popup_period,
+    createdAt:              row.created_at,
+  }
+}
+
+function mapChore(row) {
+  if (!row) return null
+  return {
+    id:           row.id,
+    familyId:     row.family_id,
+    title:        row.title,
+    type:         row.type,
+    recurrence:   row.recurrence,
+    daysPerWeek:  row.days_per_week,
+    value:        row.value,
+    assignedTo:   row.assigned_to ?? [],
+    isActive:     row.is_active,
+  }
+}
+
+function mapChoreLog(row) {
+  if (!row) return null
+  return {
+    id:          row.id,
+    choreId:     row.chore_id,
+    memberId:    row.member_id,
+    date:        row.date,
+    status:      row.status,
+    completedAt: row.completed_at,
+    approvedAt:  row.approved_at,
+  }
+}
+
+function mapTransaction(row) {
+  if (!row) return null
+  return {
+    id:          row.id,
+    memberId:    row.member_id,
+    type:        row.type,
+    amount:      row.amount,
+    description: row.description,
+    date:        row.date,
+    relatedId:   row.related_id,
+  }
+}
+
+function mapPayslip(row) {
+  if (!row) return null
+  return {
+    id:                  row.id,
+    memberId:            row.member_id,
+    periodStart:         row.period_start,
+    periodEnd:           row.period_end,
+    earnings:            row.earnings,
+    deductions:          row.deductions,
+    gross:               row.gross,
+    net:                 row.net,
+    allocations:         row.allocations,
+    interestEarned:      row.interest_earned,
+    loanOutstandingAfter: row.loan_outstanding_after,
+    balancesAfter:       row.balances_after,
+    creditScore:         row.credit_score,
+    createdAt:           row.created_at,
+    totalDeductions:     row.total_deductions,
+    status:              row.status ?? 'settled',
+  }
+}
+
+function mapReward(row) {
+  if (!row) return null
+  return {
+    id:       row.id,
+    familyId: row.family_id,
+    title:    row.title,
+    category: row.category,
+    cost:     row.cost,
+    isActive: row.is_active,
+    emoji:    row.emoji,
+  }
+}
+
+function mapRewardRequest(row) {
+  if (!row) return null
+  return {
+    id:          row.id,
+    memberId:    row.member_id,
+    rewardId:    row.reward_id,
+    rewardTitle: row.reward_title,
+    amount:      row.amount,
+    status:      row.status,
+    requestedAt: row.requested_at,
+    resolvedAt:  row.resolved_at,
+  }
+}
+
+function mapUtilityCharge(row) {
+  if (!row) return null
+  return {
+    id:       row.id,
+    memberId: row.member_id,
+    date:     row.date,
+    reason:   row.reason,
+    amount:   row.amount,
+  }
+}
+
+// ── Error helper ─────────────────────────────────────────────────────────────
+
+function throwIfError({ error }) {
+  if (error) throw new Error(error.message)
+}
 
 // ── Family ──────────────────────────────────────────────────────────────────
 
-export const getFamily = (id) => db.families.get(id)
+export async function getFamily(id) {
+  const { data, error } = await supabase
+    .from('families')
+    .select('*')
+    .eq('id', id)
+    .single()
+  if (error && error.code === 'PGRST116') return null // not found
+  throwIfError({ error })
+  return mapFamily(data)
+}
 
-export const updateFamilyConfig = (familyId, config) =>
-  db.families.update(familyId, { config })
+export async function updateFamilyConfig(familyId, config) {
+  throwIfError(await supabase
+    .from('families')
+    .update({ config })
+    .eq('id', familyId))
+}
 
-export const updateTaxFund = (familyId, balance, history) =>
-  db.families.update(familyId, { taxFundBalance: balance, taxFundHistory: history })
+export async function updateTaxFund(familyId, balance, history) {
+  throwIfError(await supabase
+    .from('families')
+    .update({ tax_fund_balance: balance, tax_fund_history: history })
+    .eq('id', familyId))
+}
 
 // ── Members ──────────────────────────────────────────────────────────────────
 
-export const getMembers = (familyId) =>
-  db.members.where('familyId').equals(familyId).toArray()
+export async function getMembers(familyId) {
+  const { data, error } = await supabase
+    .from('members')
+    .select('*')
+    .eq('family_id', familyId)
+  throwIfError({ error })
+  return (data ?? []).map(mapMember)
+}
 
-export const getMember = (id) => db.members.get(id)
+export async function getMember(id) {
+  const { data, error } = await supabase
+    .from('members')
+    .select('*')
+    .eq('id', id)
+    .single()
+  if (error && error.code === 'PGRST116') return null
+  throwIfError({ error })
+  return mapMember(data)
+}
 
-export const updateMember = (id, changes) => db.members.update(id, changes)
+export async function updateMember(id, changes) {
+  // Map camelCase keys to snake_case
+  const row = {}
+  if ('name' in changes)       row.name        = changes.name
+  if ('avatar' in changes)     row.avatar       = changes.avatar
+  if ('tier' in changes)       row.tier         = changes.tier
+  if ('role' in changes)       row.role         = changes.role
+  if ('pin' in changes)        row.pin     = changes.pin
+  if ('baseSalary' in changes) row.base_salary  = changes.baseSalary
+  if ('accounts' in changes)   row.accounts     = changes.accounts
+  if ('config' in changes)     row.config       = changes.config
+  if ('creditScore' in changes) row.credit_score = changes.creditScore
+  if ('lastCreditPopupPeriod' in changes) row.last_credit_popup_period = changes.lastCreditPopupPeriod
+  throwIfError(await supabase.from('members').update(row).eq('id', id))
+}
 
-export const updateMemberAccounts = (memberId, accounts) =>
-  db.members.update(memberId, { accounts })
+export async function updateMemberAccounts(memberId, accounts) {
+  throwIfError(await supabase
+    .from('members')
+    .update({ accounts })
+    .eq('id', memberId))
+}
 
 // ── Chores ───────────────────────────────────────────────────────────────────
 
-export const getChores = (familyId) =>
-  db.chores.where('familyId').equals(familyId).toArray()
+export async function getChores(familyId) {
+  const { data, error } = await supabase
+    .from('chores')
+    .select('*')
+    .eq('family_id', familyId)
+  throwIfError({ error })
+  return (data ?? []).map(mapChore)
+}
 
-export const addChore = (chore) =>
-  db.chores.add({ id: crypto.randomUUID(), ...chore })
+export async function addChore(chore) {
+  const row = {
+    id:           crypto.randomUUID(),
+    family_id:    chore.familyId,
+    title:        chore.title,
+    type:         chore.type,
+    recurrence:   chore.recurrence,
+    days_per_week: chore.daysPerWeek ?? null,
+    value:        chore.value ?? 0,
+    assigned_to:  chore.assignedTo ?? [],
+    is_active:    chore.isActive ?? true,
+  }
+  const { data, error } = await supabase.from('chores').insert(row).select().single()
+  throwIfError({ error })
+  return mapChore(data)
+}
 
-export const updateChore = (id, changes) => db.chores.update(id, changes)
+export async function updateChore(id, changes) {
+  const row = {}
+  if ('title' in changes)      row.title         = changes.title
+  if ('type' in changes)       row.type          = changes.type
+  if ('recurrence' in changes) row.recurrence    = changes.recurrence
+  if ('daysPerWeek' in changes) row.days_per_week = changes.daysPerWeek
+  if ('value' in changes)      row.value         = changes.value
+  if ('assignedTo' in changes) row.assigned_to   = changes.assignedTo
+  if ('isActive' in changes)   row.is_active     = changes.isActive
+  throwIfError(await supabase.from('chores').update(row).eq('id', id))
+}
 
-export const toggleChoreActive = (id, current) =>
-  db.chores.update(id, { isActive: !current })
+export async function toggleChoreActive(id, current) {
+  throwIfError(await supabase
+    .from('chores')
+    .update({ is_active: !current })
+    .eq('id', id))
+}
 
-export const deleteChore = (id) => db.chores.update(id, { isActive: false })
+export async function deleteChore(id) {
+  throwIfError(await supabase
+    .from('chores')
+    .update({ is_active: false })
+    .eq('id', id))
+}
 
 // ── Chore Logs ───────────────────────────────────────────────────────────────
 
-export const getChoreLogsForDate = (memberId, date) =>
-  db.choreLogs
-    .where('memberId').equals(memberId)
-    .filter(log => log.date === date)
-    .toArray()
+export async function getChoreLogsForDate(memberId, date) {
+  const { data, error } = await supabase
+    .from('chore_logs')
+    .select('*')
+    .eq('member_id', memberId)
+    .eq('date', date)
+  throwIfError({ error })
+  return (data ?? []).map(mapChoreLog)
+}
 
-export const getChoreLogsForPeriod = (memberId, startDate, endDate) =>
-  db.choreLogs
-    .where('memberId').equals(memberId)
-    .filter(log => log.date >= startDate && log.date <= endDate)
-    .toArray()
+export async function getChoreLogsForPeriod(memberId, startDate, endDate) {
+  const { data, error } = await supabase
+    .from('chore_logs')
+    .select('*')
+    .eq('member_id', memberId)
+    .gte('date', startDate)
+    .lte('date', endDate)
+  throwIfError({ error })
+  return (data ?? []).map(mapChoreLog)
+}
 
-/** All pending logs across a set of member IDs (for parent approval screen) */
-export const getPendingLogsForMembers = (memberIds) =>
-  db.choreLogs
-    .where('status').equals('pending')
-    .filter(log => memberIds.includes(log.memberId))
-    .toArray()
+export async function getPendingLogsForMembers(memberIds) {
+  if (!memberIds.length) return []
+  const { data, error } = await supabase
+    .from('chore_logs')
+    .select('*')
+    .eq('status', 'pending')
+    .in('member_id', memberIds)
+  throwIfError({ error })
+  return (data ?? []).map(mapChoreLog)
+}
 
-export const addChoreLog = (chore) =>
-  db.choreLogs.add({
-    id: crypto.randomUUID(),
-    choreId: chore.choreId,
-    memberId: chore.memberId,
-    date: chore.date,
-    status: 'pending',
-    completedAt: Date.now(),
-    approvedAt: null,
-  })
+export async function addChoreLog(chore) {
+  const row = {
+    id:           crypto.randomUUID(),
+    chore_id:     chore.choreId,
+    member_id:    chore.memberId,
+    date:         chore.date,
+    status:       'pending',
+    completed_at: Date.now(),
+    approved_at:  null,
+  }
+  throwIfError(await supabase.from('chore_logs').insert(row))
+}
 
-export const approveChoreLog = (id) =>
-  db.choreLogs.update(id, { status: 'approved', approvedAt: Date.now() })
+export async function approveChoreLog(id) {
+  throwIfError(await supabase
+    .from('chore_logs')
+    .update({ status: 'approved', approved_at: Date.now() })
+    .eq('id', id))
+}
 
-export const rejectChoreLog = (id) =>
-  db.choreLogs.update(id, { status: 'rejected', approvedAt: Date.now() })
+export async function rejectChoreLog(id) {
+  throwIfError(await supabase
+    .from('chore_logs')
+    .update({ status: 'rejected', approved_at: Date.now() })
+    .eq('id', id))
+}
 
-export const updateChoreLog = (id, changes) => db.choreLogs.update(id, changes)
+export async function updateChoreLog(id, changes) {
+  const row = {}
+  if ('status' in changes)     row.status      = changes.status
+  if ('approvedAt' in changes) row.approved_at = changes.approvedAt
+  throwIfError(await supabase.from('chore_logs').update(row).eq('id', id))
+}
 
 // ── Transactions ─────────────────────────────────────────────────────────────
 
-export const getTransactions = (memberId, limit = 50) =>
-  db.transactions
-    .where('memberId').equals(memberId)
-    .reverse()
+export async function getTransactions(memberId, limit = 50) {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('member_id', memberId)
+    .order('date', { ascending: false })
     .limit(limit)
-    .toArray()
+  throwIfError({ error })
+  return (data ?? []).map(mapTransaction)
+}
 
-export const addTransaction = (tx) => db.transactions.add(tx)
+export async function getTransactionsForPeriod(memberId, periodStart, periodEnd) {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('member_id', memberId)
+    .gte('date', periodStart)
+    .lte('date', periodEnd)
+    .order('date', { ascending: false })
+  throwIfError({ error })
+  return (data ?? []).map(mapTransaction)
+}
+
+export async function addTransaction(tx) {
+  const row = {
+    id:          tx.id ?? crypto.randomUUID(),
+    member_id:   tx.memberId,
+    type:        tx.type,
+    amount:      tx.amount,
+    description: tx.description,
+    date:        tx.date,
+    related_id:  tx.relatedId ?? null,
+  }
+  throwIfError(await supabase.from('transactions').insert(row))
+}
 
 // ── Rewards ──────────────────────────────────────────────────────────────────
 
-export const getRewards = (familyId) =>
-  db.rewards
-    .where('familyId').equals(familyId)
-    .filter(r => r.isActive)
-    .toArray()
+export async function getRewards(familyId) {
+  const { data, error } = await supabase
+    .from('rewards')
+    .select('*')
+    .eq('family_id', familyId)
+    .eq('is_active', true)
+  throwIfError({ error })
+  return (data ?? []).map(mapReward)
+}
 
-export const addReward = (reward) => db.rewards.add(reward)
+export async function getAllRewards(familyId) {
+  const { data, error } = await supabase
+    .from('rewards')
+    .select('*')
+    .eq('family_id', familyId)
+  throwIfError({ error })
+  return (data ?? []).map(mapReward)
+}
 
-export const updateReward = (id, changes) => db.rewards.update(id, changes)
+export async function addReward(reward) {
+  const row = {
+    id:        reward.id ?? crypto.randomUUID(),
+    family_id: reward.familyId,
+    title:     reward.title,
+    category:  reward.category,
+    cost:      reward.cost,
+    is_active: reward.isActive ?? true,
+    emoji:     reward.emoji ?? null,
+  }
+  throwIfError(await supabase.from('rewards').insert(row))
+}
 
-export const getAllRewards = (familyId) =>
-  db.rewards.where('familyId').equals(familyId).toArray()
+export async function updateReward(id, changes) {
+  const row = {}
+  if ('title' in changes)    row.title     = changes.title
+  if ('category' in changes) row.category  = changes.category
+  if ('cost' in changes)     row.cost      = changes.cost
+  if ('isActive' in changes) row.is_active = changes.isActive
+  if ('emoji' in changes)    row.emoji     = changes.emoji
+  throwIfError(await supabase.from('rewards').update(row).eq('id', id))
+}
 
-export const deleteReward = (id) => db.rewards.update(id, { isActive: false })
+export async function deleteReward(id) {
+  throwIfError(await supabase
+    .from('rewards')
+    .update({ is_active: false })
+    .eq('id', id))
+}
 
 // ── Reward Requests ───────────────────────────────────────────────────────────
 
-export const addRewardRequest = (req) =>
-  db.rewardRequests.add({
-    id: crypto.randomUUID(),
-    memberId:    req.memberId,
-    rewardId:    req.rewardId,
-    rewardTitle: req.rewardTitle,
-    amount:      req.amount,
-    status:      'pending',
-    requestedAt: Date.now(),
-    resolvedAt:  null,
+export async function addRewardRequest(req) {
+  const row = {
+    id:           crypto.randomUUID(),
+    member_id:    req.memberId,
+    reward_id:    req.rewardId,
+    reward_title: req.rewardTitle,
+    amount:       req.amount,
+    status:       'pending',
+    requested_at: Date.now(),
+    resolved_at:  null,
+  }
+  throwIfError(await supabase.from('reward_requests').insert(row))
+}
+
+export async function getRewardRequests(memberId) {
+  const { data, error } = await supabase
+    .from('reward_requests')
+    .select('*')
+    .eq('member_id', memberId)
+    .order('requested_at', { ascending: false })
+  throwIfError({ error })
+  return (data ?? []).map(mapRewardRequest)
+}
+
+export async function getPendingRewardRequests(memberIds) {
+  if (!memberIds.length) return []
+  const { data, error } = await supabase
+    .from('reward_requests')
+    .select('*')
+    .eq('status', 'pending')
+    .in('member_id', memberIds)
+  throwIfError({ error })
+  return (data ?? []).map(mapRewardRequest)
+}
+
+export async function rejectRewardRequest(id) {
+  throwIfError(await supabase
+    .from('reward_requests')
+    .update({ status: 'rejected', resolved_at: Date.now() })
+    .eq('id', id))
+}
+
+// ── Compound operations ───────────────────────────────────────────────────────
+
+export async function approveTier1ChoreLog(logId, memberId, coinAmount) {
+  const member = await getMember(memberId)
+  if (!member) throw new Error('Member not found')
+  const jar = member.accounts?.goalJar
+  if (!jar) {
+    return approveChoreLog(logId)
+  }
+
+  await approveChoreLog(logId)
+  const newBalance = Math.min((jar.balance ?? 0) + coinAmount, jar.target)
+  await updateMemberAccounts(memberId, {
+    ...member.accounts,
+    goalJar: { ...jar, balance: newBalance },
   })
+  await updateCreditScore(memberId, 2)
+}
 
-export const getRewardRequests = (memberId) =>
-  db.rewardRequests.where('memberId').equals(memberId).reverse().toArray()
+export async function approveBonusChoreLog(logId, memberId, choreId) {
+  const [choreResult, member] = await Promise.all([
+    supabase.from('chores').select('*').eq('id', choreId).single(),
+    getMember(memberId),
+  ])
+  if (choreResult.error) throw new Error('Chore not found')
+  if (!member) throw new Error('Member not found')
+  const chore = mapChore(choreResult.data)
 
-export const getPendingRewardRequests = (memberIds) =>
-  db.rewardRequests
-    .where('status').equals('pending')
-    .filter(r => memberIds.includes(r.memberId))
-    .toArray()
-
-export const rejectRewardRequest = (id) =>
-  db.rewardRequests.update(id, { status: 'rejected', resolvedAt: Date.now() })
+  await approveChoreLog(logId)
+  await updateMemberAccounts(memberId, {
+    ...member.accounts,
+    spending: member.accounts.spending + chore.value,
+  })
+  await addTransaction({
+    id: crypto.randomUUID(),
+    memberId,
+    type: 'bonus',
+    amount: chore.value,
+    description: `Bonus: ${chore.title}`,
+    date: today(),
+    relatedId: logId,
+  })
+}
 
 export async function approveRewardRequest(requestId, memberId, amount) {
   const member = await getMember(memberId)
   if (!member) throw new Error('Member not found')
   if (member.accounts.spending < amount) throw new Error('Insufficient balance')
 
-  await db.transaction('rw', [db.rewardRequests, db.members, db.transactions], async () => {
-    await db.rewardRequests.update(requestId, { status: 'approved', resolvedAt: Date.now() })
-    await updateMemberAccounts(memberId, {
-      ...member.accounts,
-      spending: member.accounts.spending - amount,
-    })
-    const req = await db.rewardRequests.get(requestId)
-    await addTransaction({
-      id: crypto.randomUUID(),
-      memberId,
-      type: 'reward',
-      amount: -amount,
-      description: `Reward: ${req?.rewardTitle ?? 'Reward'}`,
-      date: new Date().toISOString().slice(0, 10),
-      relatedId: requestId,
-    })
+  const { data: reqRow } = await supabase
+    .from('reward_requests').select('*').eq('id', requestId).single()
+
+  await supabase
+    .from('reward_requests')
+    .update({ status: 'approved', resolved_at: Date.now() })
+    .eq('id', requestId)
+  await updateMemberAccounts(memberId, {
+    ...member.accounts,
+    spending: member.accounts.spending - amount,
+  })
+  await addTransaction({
+    id: crypto.randomUUID(),
+    memberId,
+    type: 'reward',
+    amount: -amount,
+    description: `Reward: ${reqRow?.reward_title ?? 'Reward'}`,
+    date: new Date().toISOString().slice(0, 10),
+    relatedId: requestId,
   })
 }
 
 // ── Payslips ─────────────────────────────────────────────────────────────────
 
-export const getPayslips = (memberId) =>
-  db.payslips
-    .where('memberId').equals(memberId)
-    .reverse()
-    .toArray()
+export async function getPayslips(memberId) {
+  const { data, error } = await supabase
+    .from('payslips')
+    .select('*')
+    .eq('member_id', memberId)
+    .order('period_end', { ascending: false })
+  throwIfError({ error })
+  return (data ?? []).map(mapPayslip)
+}
 
-export const getLatestPayslip = (memberId) =>
-  db.payslips
-    .where('memberId').equals(memberId)
-    .last()
+export async function getLatestPayslip(memberId) {
+  const { data, error } = await supabase
+    .from('payslips')
+    .select('*')
+    .eq('member_id', memberId)
+    .order('period_end', { ascending: false })
+    .limit(1)
+    .single()
+  if (error && error.code === 'PGRST116') return null
+  throwIfError({ error })
+  return mapPayslip(data)
+}
 
-export const addPayslip = (payslip) => db.payslips.add(payslip)
+export async function getPayslipForPeriod(memberId, periodEnd) {
+  const { data, error } = await supabase
+    .from('payslips')
+    .select('*')
+    .eq('member_id', memberId)
+    .eq('period_end', periodEnd)
+    .single()
+  if (error && error.code === 'PGRST116') return null
+  throwIfError({ error })
+  return mapPayslip(data)
+}
+
+export async function addPayslip(payslip) {
+  const row = {
+    id:                    payslip.id ?? crypto.randomUUID(),
+    member_id:             payslip.memberId,
+    period_start:          payslip.periodStart,
+    period_end:            payslip.periodEnd,
+    earnings:              payslip.earnings,
+    deductions:            payslip.deductions,
+    gross:                 payslip.gross,
+    net:                   payslip.net,
+    allocations:           payslip.allocations,
+    total_deductions:      payslip.totalDeductions,
+    interest_earned:       payslip.interestEarned,
+    loan_outstanding_after: payslip.loanOutstandingAfter,
+    balances_after:        payslip.balancesAfter,
+    credit_score:          payslip.creditScore,
+    created_at:            payslip.createdAt ?? new Date().toISOString(),
+    status:                payslip.status ?? 'draft',
+  }
+  throwIfError(await supabase.from('payslips').insert(row))
+}
+
+export async function getPayslip(payslipId) {
+  const { data, error } = await supabase
+    .from('payslips')
+    .select('*')
+    .eq('id', payslipId)
+    .single()
+  if (error && error.code === 'PGRST116') return null
+  throwIfError({ error })
+  return mapPayslip(data)
+}
+
+export async function updatePayslipStatus(payslipId, status) {
+  throwIfError(await supabase
+    .from('payslips')
+    .update({ status })
+    .eq('id', payslipId))
+}
+
+// Returns draft payslips from previous periods (genuinely forgotten, not current-period pre-runs)
+export async function getOverdueDrafts(memberIds, currentPeriodEnd) {
+  if (!memberIds.length) return []
+  const { data, error } = await supabase
+    .from('payslips')
+    .select('*')
+    .in('member_id', memberIds)
+    .eq('status', 'draft')
+    .lt('period_end', currentPeriodEnd)
+  throwIfError({ error })
+  return (data ?? []).map(mapPayslip)
+}
 
 // ── Utility Charges ──────────────────────────────────────────────────────────
 
-export const getUtilityCharges = (memberId, weekStart, weekEnd) =>
-  db.utilityCharges
-    .where('memberId').equals(memberId)
-    .filter(u => u.date >= weekStart && u.date <= weekEnd)
-    .toArray()
+export async function getUtilityCharges(memberId, weekStart, weekEnd) {
+  const { data, error } = await supabase
+    .from('utility_charges')
+    .select('*')
+    .eq('member_id', memberId)
+    .gte('date', weekStart)
+    .lte('date', weekEnd)
+  throwIfError({ error })
+  return (data ?? []).map(mapUtilityCharge)
+}
 
-export const getAllPendingUtilityCharges = (memberId) =>
-  db.utilityCharges
-    .where('memberId').equals(memberId)
-    .toArray()
+export async function getAllPendingUtilityCharges(memberId) {
+  const { data, error } = await supabase
+    .from('utility_charges')
+    .select('*')
+    .eq('member_id', memberId)
+  throwIfError({ error })
+  return (data ?? []).map(mapUtilityCharge)
+}
 
-export const addUtilityCharge = (charge) => db.utilityCharges.add(charge)
+export async function addUtilityCharge(charge) {
+  const row = {
+    id:        charge.id ?? crypto.randomUUID(),
+    member_id: charge.memberId,
+    date:      charge.date,
+    reason:    charge.reason,
+    amount:    charge.amount,
+  }
+  throwIfError(await supabase.from('utility_charges').insert(row))
+}
+
+// ── Parent Money Actions ──────────────────────────────────────────────────────
+
+export async function giveBonus(memberId, amount, reason) {
+  const member = await getMember(memberId)
+  if (!member) throw new Error('Member not found')
+
+  await updateMemberAccounts(memberId, {
+    ...member.accounts,
+    spending: member.accounts.spending + amount,
+  })
+  await addTransaction({
+    id: crypto.randomUUID(),
+    memberId,
+    type: 'parent_bonus',
+    amount,
+    description: reason || 'Bonus from parent',
+    date: today(),
+    relatedId: null,
+  })
+}
+
+export async function giveLoan(memberId, amount, weeklyRepayment, interestFree = false) {
+  const member = await getMember(memberId)
+  if (!member) throw new Error('Member not found')
+
+  const currentLoan = member.accounts.loan ?? { outstanding: 0, weeklyRepayment: 0 }
+  const effectiveRepayment    = Math.max(weeklyRepayment, currentLoan.weeklyRepayment ?? 0)
+  const effectiveInterestFree = interestFree && (currentLoan.interestFree !== false)
+
+  await updateMemberAccounts(memberId, {
+    ...member.accounts,
+    spending: member.accounts.spending + amount,
+    loan: {
+      outstanding:     currentLoan.outstanding + amount,
+      weeklyRepayment: effectiveRepayment,
+      interestFree:    effectiveInterestFree,
+    },
+  })
+  await addTransaction({
+    id: crypto.randomUUID(),
+    memberId,
+    type: 'loan_credit',
+    amount,
+    description: `Loan from parent (₹${weeklyRepayment}/wk repayment)`,
+    date: today(),
+    relatedId: null,
+  })
+}
+
+export async function makeEarlyRepayment(memberId, amount) {
+  const member = await getMember(memberId)
+  if (!member) throw new Error('Member not found')
+  const loan = member.accounts?.loan
+  if (!loan || loan.outstanding <= 0) throw new Error('No active loan')
+
+  const actual         = Math.min(amount, loan.outstanding, member.accounts.spending)
+  if (actual <= 0)     throw new Error('Insufficient spending balance')
+  const newOutstanding = loan.outstanding - actual
+
+  await updateMemberAccounts(memberId, {
+    ...member.accounts,
+    spending: member.accounts.spending - actual,
+    loan: newOutstanding > 0
+      ? { ...loan, outstanding: newOutstanding }
+      : null,
+  })
+  await addTransaction({
+    id: crypto.randomUUID(),
+    memberId,
+    type: newOutstanding === 0 ? 'loan_cleared' : 'loan_repay',
+    amount: -actual,
+    description: newOutstanding === 0
+      ? 'Early repayment — loan fully cleared!'
+      : `Early repayment (${newOutstanding} remaining)`,
+    date: today(),
+    relatedId: null,
+  })
+  await updateCreditScore(memberId, newOutstanding === 0 ? 20 : 5)
+
+  return newOutstanding
+}
+
+export async function updateLoanRepayment(memberId, weeklyRepayment) {
+  const member = await getMember(memberId)
+  if (!member) throw new Error('Member not found')
+  const loan = member.accounts?.loan
+  if (!loan) throw new Error('No active loan')
+  await updateMemberAccounts(memberId, {
+    ...member.accounts,
+    loan: { ...loan, weeklyRepayment },
+  })
+}
+
+export async function addMember(memberData) {
+  const row = {
+    id:         memberData.id ?? crypto.randomUUID(),
+    family_id:  memberData.familyId,
+    name:       memberData.name,
+    avatar:     memberData.avatar ?? '👤',
+    tier:       memberData.tier ?? null,
+    role:       memberData.role,
+    pin:   memberData.pin,
+    base_salary: memberData.baseSalary ?? 0,
+    accounts:   memberData.accounts ?? { spending: 0, savings: 0, goalJar: null },
+    config:     memberData.config ?? null,
+    credit_score: memberData.creditScore ?? 500,
+  }
+  const { data, error } = await supabase.from('members').insert(row).select().single()
+  throwIfError({ error })
+  return mapMember(data)
+}
+
+export async function addLoanInterest(memberId, interestRate) {
+  const member = await getMember(memberId)
+  if (!member) throw new Error('Member not found')
+  const loan = member.accounts?.loan
+  if (!loan || loan.outstanding <= 0) throw new Error('No outstanding loan')
+
+  const interest = Math.round(loan.outstanding * interestRate)
+  if (interest <= 0) return
+
+  await updateMemberAccounts(memberId, {
+    ...member.accounts,
+    loan: { ...loan, outstanding: loan.outstanding + interest },
+  })
+  await addTransaction({
+    id: crypto.randomUUID(),
+    memberId,
+    type: 'loan_interest',
+    amount: interest,
+    description: `Loan interest (${Math.round(interestRate * 100)}%)`,
+    date: today(),
+    relatedId: null,
+  })
+}
+
+// ── Per-child economic config ─────────────────────────────────────────────────
+
+export async function updateMemberConfig(memberId, config) {
+  throwIfError(await supabase
+    .from('members')
+    .update({ config: config ?? null })
+    .eq('id', memberId))
+}
+
+// ── Credit Score ─────────────────────────────────────────────────────────────
+
+export async function updateCreditScore(memberId, delta) {
+  const member = await getMember(memberId)
+  if (!member) return
+  const current  = member.creditScore ?? 500
+  const newScore = Math.min(850, Math.max(300, Math.round(current + delta)))
+  throwIfError(await supabase
+    .from('members')
+    .update({ credit_score: newScore })
+    .eq('id', memberId))
+  return newScore
+}
+
+// ── Credit popup seen marker ──────────────────────────────────────────────────
+
+export async function markCreditPopupSeen(memberId, periodEnd) {
+  throwIfError(await supabase
+    .from('members')
+    .update({ last_credit_popup_period: periodEnd })
+    .eq('id', memberId))
+}
 
 // ── Data Export / Import (Backup & Restore) ──────────────────────────────────
 
-export async function exportAllData() {
-  const [families, members, chores, choreLogs, transactions, rewards, payslips, utilityCharges, rewardRequests] =
-    await Promise.all([
-      db.families.toArray(),
-      db.members.toArray(),
-      db.chores.toArray(),
-      db.choreLogs.toArray(),
-      db.transactions.toArray(),
-      db.rewards.toArray(),
-      db.payslips.toArray(),
-      db.utilityCharges.toArray(),
-      db.rewardRequests.toArray(),
-    ])
+export async function exportAllData(familyId) {
+  const [
+    familyRes, membersRes, choresRes, choreLogsRes,
+    transactionsRes, rewardsRes, payslipsRes,
+    utilityChargesRes, rewardRequestsRes,
+  ] = await Promise.all([
+    supabase.from('families').select('*').eq('id', familyId),
+    supabase.from('members').select('*').eq('family_id', familyId),
+    supabase.from('chores').select('*').eq('family_id', familyId),
+    supabase.from('chore_logs').select('*').in(
+      'member_id',
+      (await supabase.from('members').select('id').eq('family_id', familyId)).data?.map(m => m.id) ?? []
+    ),
+    supabase.from('transactions').select('*').in(
+      'member_id',
+      (await supabase.from('members').select('id').eq('family_id', familyId)).data?.map(m => m.id) ?? []
+    ),
+    supabase.from('rewards').select('*').eq('family_id', familyId),
+    supabase.from('payslips').select('*').in(
+      'member_id',
+      (await supabase.from('members').select('id').eq('family_id', familyId)).data?.map(m => m.id) ?? []
+    ),
+    supabase.from('utility_charges').select('*').in(
+      'member_id',
+      (await supabase.from('members').select('id').eq('family_id', familyId)).data?.map(m => m.id) ?? []
+    ),
+    supabase.from('reward_requests').select('*').in(
+      'member_id',
+      (await supabase.from('members').select('id').eq('family_id', familyId)).data?.map(m => m.id) ?? []
+    ),
+  ])
 
   return {
     exportedAt: new Date().toISOString(),
-    version: 2,
-    families, members, chores, choreLogs, transactions,
-    rewards, payslips, utilityCharges, rewardRequests,
+    version: 3,
+    families:       (familyRes.data ?? []).map(mapFamily),
+    members:        (membersRes.data ?? []).map(mapMember),
+    chores:         (choresRes.data ?? []).map(mapChore),
+    choreLogs:      (choreLogsRes.data ?? []).map(mapChoreLog),
+    transactions:   (transactionsRes.data ?? []).map(mapTransaction),
+    rewards:        (rewardsRes.data ?? []).map(mapReward),
+    payslips:       (payslipsRes.data ?? []).map(mapPayslip),
+    utilityCharges: (utilityChargesRes.data ?? []).map(mapUtilityCharge),
+    rewardRequests: (rewardRequestsRes.data ?? []).map(mapRewardRequest),
   }
 }
 
 export async function importAllData(data) {
-  await db.transaction('rw',
-    [db.families, db.members, db.chores, db.choreLogs, db.transactions, db.rewards, db.payslips, db.utilityCharges, db.rewardRequests],
-    async () => {
-      await Promise.all([
-        db.families.clear(), db.members.clear(), db.chores.clear(),
-        db.choreLogs.clear(), db.transactions.clear(), db.rewards.clear(),
-        db.payslips.clear(), db.utilityCharges.clear(), db.rewardRequests.clear(),
-      ])
-      await Promise.all([
-        db.families.bulkAdd(data.families),
-        db.members.bulkAdd(data.members),
-        db.chores.bulkAdd(data.chores),
-        db.choreLogs.bulkAdd(data.choreLogs),
-        db.transactions.bulkAdd(data.transactions),
-        db.rewards.bulkAdd(data.rewards),
-        db.payslips.bulkAdd(data.payslips),
-        db.utilityCharges.bulkAdd(data.utilityCharges),
-        data.rewardRequests?.length ? db.rewardRequests.bulkAdd(data.rewardRequests) : Promise.resolve(),
-      ])
-    }
-  )
+  // Clear all data for this family first
+  const memberIds = (data.members ?? []).map(m => m.id)
+  const familyId  = data.families?.[0]?.id
+
+  if (!familyId) throw new Error('No family in backup')
+
+  // Delete in reverse-dependency order
+  if (memberIds.length) {
+    await Promise.all([
+      supabase.from('chore_logs').delete().in('member_id', memberIds),
+      supabase.from('transactions').delete().in('member_id', memberIds),
+      supabase.from('payslips').delete().in('member_id', memberIds),
+      supabase.from('utility_charges').delete().in('member_id', memberIds),
+      supabase.from('reward_requests').delete().in('member_id', memberIds),
+    ])
+  }
+  await supabase.from('chores').delete().eq('family_id', familyId)
+  await supabase.from('rewards').delete().eq('family_id', familyId)
+  await supabase.from('members').delete().eq('family_id', familyId)
+  await supabase.from('families').delete().eq('id', familyId)
+
+  // Re-insert families
+  for (const fam of data.families ?? []) {
+    throwIfError(await supabase.from('families').insert({
+      id:               fam.id,
+      name:             fam.name,
+      config:           fam.config,
+      tax_fund_balance: fam.taxFundBalance ?? 0,
+      tax_fund_history: fam.taxFundHistory ?? [],
+    }))
+  }
+
+  // Re-insert members
+  for (const m of data.members ?? []) {
+    throwIfError(await supabase.from('members').insert({
+      id:           m.id,
+      family_id:    m.familyId,
+      name:         m.name,
+      avatar:       m.avatar,
+      tier:         m.tier,
+      role:         m.role,
+      pin:     m.pin,
+      base_salary:  m.baseSalary,
+      accounts:     m.accounts,
+      config:       m.config ?? null,
+      credit_score: m.creditScore ?? 500,
+      last_credit_popup_period: m.lastCreditPopupPeriod ?? null,
+    }))
+  }
+
+  // Re-insert chores
+  for (const c of data.chores ?? []) {
+    throwIfError(await supabase.from('chores').insert({
+      id:            c.id,
+      family_id:     c.familyId,
+      title:         c.title,
+      type:          c.type,
+      recurrence:    c.recurrence,
+      days_per_week: c.daysPerWeek ?? null,
+      value:         c.value ?? 0,
+      assigned_to:   c.assignedTo ?? [],
+      is_active:     c.isActive ?? true,
+    }))
+  }
+
+  // Re-insert rewards
+  for (const r of data.rewards ?? []) {
+    throwIfError(await supabase.from('rewards').insert({
+      id:        r.id,
+      family_id: r.familyId,
+      title:     r.title,
+      category:  r.category,
+      cost:      r.cost,
+      is_active: r.isActive ?? true,
+      emoji:     r.emoji ?? null,
+    }))
+  }
+
+  // Bulk insert remaining tables
+  // payslips.created_at is timestamptz; chore/reward timestamps are bigint (ms numbers)
+  const msToISO = (v) => v ? (typeof v === 'number' ? new Date(v).toISOString() : v) : null
+
+  if ((data.choreLogs ?? []).length) {
+    throwIfError(await supabase.from('chore_logs').insert(
+      data.choreLogs.map(l => ({
+        id: l.id, chore_id: l.choreId, member_id: l.memberId,
+        date: l.date, status: l.status,
+        completed_at: l.completedAt ?? null,
+        approved_at:  l.approvedAt  ?? null,
+      }))
+    ))
+  }
+  if ((data.transactions ?? []).length) {
+    throwIfError(await supabase.from('transactions').insert(
+      data.transactions.map(t => ({
+        id: t.id, member_id: t.memberId, type: t.type,
+        amount: t.amount, description: t.description,
+        date: t.date, related_id: t.relatedId ?? null,
+      }))
+    ))
+  }
+  if ((data.payslips ?? []).length) {
+    throwIfError(await supabase.from('payslips').insert(
+      data.payslips.map(p => ({
+        id: p.id, member_id: p.memberId,
+        period_start: p.periodStart, period_end: p.periodEnd,
+        earnings: p.earnings, deductions: p.deductions,
+        gross: p.gross, net: p.net, allocations: p.allocations,
+        total_deductions: p.totalDeductions,
+        interest_earned: p.interestEarned,
+        loan_outstanding_after: p.loanOutstandingAfter,
+        balances_after: p.balancesAfter,
+        credit_score: p.creditScore,
+        created_at: msToISO(p.createdAt),
+      }))
+    ))
+  }
+  if ((data.utilityCharges ?? []).length) {
+    throwIfError(await supabase.from('utility_charges').insert(
+      data.utilityCharges.map(u => ({
+        id: u.id, member_id: u.memberId,
+        date: u.date, reason: u.reason, amount: u.amount,
+      }))
+    ))
+  }
+  if ((data.rewardRequests ?? []).length) {
+    throwIfError(await supabase.from('reward_requests').insert(
+      data.rewardRequests.map(r => ({
+        id: r.id, member_id: r.memberId, reward_id: r.rewardId,
+        reward_title: r.rewardTitle, amount: r.amount, status: r.status,
+        requested_at: r.requestedAt ?? null, resolved_at: r.resolvedAt ?? null,
+      }))
+    ))
+  }
 }

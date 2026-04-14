@@ -1,56 +1,595 @@
-import { useState } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Play, AlertCircle } from 'lucide-react'
+import { Play, AlertCircle, Plus, X, FileText, CheckCircle } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
-import { useFamily } from '../../context/FamilyContext'
-import { formatRupees } from '../../utils/currency'
-import { isPayday, currentPeriodEnd, displayDate } from '../../utils/dates'
-import { runPayslip } from '../../engine/payslip'
+import { useFamily, useCurrency, usePeriod } from '../../context/FamilyContext'
+import { displayDate, today, currentPeriodEnd, currentPeriodStart } from '../../utils/dates'
+import { runPayslip, settlePayslip } from '../../engine/payslip'
+import { getDueChoresForMember, buildLogMap } from '../../engine/chores'
+import { getChoreLogsForDate, getChoreLogsForPeriod, giveBonus, giveLoan, getPayslips, getPayslipForPeriod, getOverdueDrafts } from '../../db/operations'
+import PayslipCard from '../../components/PayslipCard'
 
-function RunPayslipButton({ child, onDone }) {
-  const [running, setRunning] = useState(false)
-  const [result, setResult]   = useState(null) // 'ok' | 'exists' | 'error'
+// ── Give Money sheet ──────────────────────────────────────────────────────────
+function GiveMoneySheet({ child, onDone, onClose }) {
+  const fmt = useCurrency()
+  const [tab,          setTab]          = useState('bonus') // 'bonus' | 'loan'
+  const [amount,       setAmount]       = useState('')
+  const [reason,       setReason]       = useState('')
+  const [repay,        setRepay]        = useState('')
+  const [tenure,       setTenure]       = useState('')     // weeks to pay off
+  const [interestFree, setInterestFree] = useState(false)
+  const [saving,       setSaving]       = useState(false)
+  const [error,        setError]        = useState('')
 
-  const handle = async () => {
-    setRunning(true)
-    setResult(null)
+  const onTenureChange = (val) => {
+    setTenure(val)
+    const t = Number(val)
+    const a = Number(amount)
+    if (t > 0 && a > 0) setRepay(String(Math.ceil(a / t)))
+  }
+  const onRepayChange = (val) => {
+    setRepay(val)
+    const r = Number(val)
+    const a = Number(amount)
+    if (r > 0 && a > 0) setTenure(String(Math.ceil(a / r)))
+  }
+  const onAmountChange = (val) => {
+    setAmount(val)
+    const a = Number(val)
+    const t = Number(tenure)
+    if (t > 0 && a > 0) setRepay(String(Math.ceil(a / t)))
+  }
+
+  const QUICK_AMOUNTS = [10, 20, 50, 100]
+
+  const handleSubmit = async () => {
+    const amt = Number(amount)
+    if (!amt || amt <= 0) { setError('Enter a valid amount'); return }
+    if (tab === 'loan') {
+      const rep = Number(repay)
+      if (!rep || rep <= 0) { setError('Enter a weekly repayment amount'); return }
+      if (rep > amt) { setError('Repayment can\'t exceed loan amount'); return }
+    }
+    setSaving(true)
+    setError('')
     try {
-      await runPayslip(child.id)
-      setResult('ok')
-      onDone()
+      if (tab === 'bonus') {
+        await giveBonus(child.id, amt, reason.trim() || 'Bonus from parent')
+      } else {
+        await giveLoan(child.id, amt, Number(repay), interestFree)
+      }
+      await onDone()
+      onClose()
     } catch (e) {
-      setResult(e.message.includes('already exists') ? 'exists' : 'error')
+      setError(e.message)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  const loanOutstanding = child.accounts?.loan?.outstanding ?? 0
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end"
+      style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="rounded-t-2xl flex flex-col max-h-[80vh]"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full" style={{ background: 'var(--border-bright)' }} />
+        </div>
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3"
+          style={{ borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-2">
+            <span className="text-xl">{child.avatar}</span>
+            <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {child.name}
+            </span>
+          </div>
+          <button onClick={onClose} style={{ color: 'var(--text-muted)' }}><X size={18} /></button>
+        </div>
+
+        <div className="overflow-y-auto px-4 py-4 flex flex-col gap-4">
+          {/* Tab toggle */}
+          <div className="flex gap-2 p-1 rounded-xl" style={{ background: 'var(--bg-raised)' }}>
+            {['bonus', 'loan'].map(t => (
+              <button key={t} onClick={() => { setTab(t); setError('') }}
+                className="flex-1 py-2 rounded-lg text-xs font-mono font-semibold capitalize transition-all"
+                style={{
+                  background: tab === t ? 'var(--bg-surface)' : 'transparent',
+                  color: tab === t ? 'var(--text-primary)' : 'var(--text-muted)',
+                  border: tab === t ? '1px solid var(--border)' : '1px solid transparent',
+                }}>
+                {t === 'bonus' ? '🎁 Bonus' : '🤝 Loan'}
+              </button>
+            ))}
+          </div>
+
+          {/* Outstanding loan notice */}
+          {loanOutstanding > 0 && (
+            <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
+              style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
+              <span className="text-xs font-mono" style={{ color: 'var(--warning)' }}>
+                Outstanding loan: {fmt(loanOutstanding)} · repaying {fmt(child.accounts.loan.weeklyRepayment)}/wk
+              </span>
+            </div>
+          )}
+
+          {/* Quick amounts */}
+          <div className="flex flex-col gap-1">
+            <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>AMOUNT</label>
+            <div className="flex gap-2 mb-2">
+              {QUICK_AMOUNTS.map(q => (
+                <button key={q} onClick={() => { setAmount(String(q)); onAmountChange(String(q)) }}
+                  className="flex-1 py-1.5 rounded-lg text-xs font-mono transition-all"
+                  style={{
+                    background: amount === String(q) ? 'var(--accent-blue)' : 'var(--bg-raised)',
+                    border: `1px solid ${amount === String(q) ? 'var(--accent-blue)' : 'var(--border)'}`,
+                    color: amount === String(q) ? '#fff' : 'var(--text-muted)',
+                  }}>
+                  {fmt(q)}
+                </button>
+              ))}
+            </div>
+            <input
+              type="number" min={1} value={amount}
+              onChange={e => onAmountChange(e.target.value)}
+              placeholder="Or enter custom amount"
+              className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
+              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+            />
+          </div>
+
+          {/* Bonus reason */}
+          {tab === 'bonus' && (
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>REASON (optional)</label>
+              <input
+                value={reason} onChange={e => setReason(e.target.value)}
+                placeholder="e.g. Great exam result"
+                className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+              />
+            </div>
+          )}
+
+          {/* Loan repayment + EMI */}
+          {tab === 'loan' && (
+            <div className="flex flex-col gap-3">
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>TENURE (WEEKS) — auto-calc EMI</label>
+                <div className="flex gap-2 mb-1">
+                  {[4, 8, 12, 16].map(w => (
+                    <button key={w} onClick={() => onTenureChange(String(w))}
+                      className="flex-1 py-1.5 rounded-lg text-xs font-mono transition-all"
+                      style={{
+                        background: tenure === String(w) ? 'rgba(251,191,36,0.2)' : 'var(--bg-raised)',
+                        border: `1px solid ${tenure === String(w) ? 'rgba(251,191,36,0.4)' : 'var(--border)'}`,
+                        color: tenure === String(w) ? 'var(--warning)' : 'var(--text-muted)',
+                      }}>
+                      {w}w
+                    </button>
+                  ))}
+                </div>
+                <input
+                  type="number" min={1} value={tenure}
+                  onChange={e => onTenureChange(e.target.value)}
+                  placeholder="e.g. 8 weeks"
+                  className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
+                  style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                />
+              </div>
+
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>WEEKLY REPAYMENT — or set manually</label>
+                <input
+                  type="number" min={1} value={repay}
+                  onChange={e => onRepayChange(e.target.value)}
+                  placeholder="Deducted from each payslip"
+                  className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
+                  style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                />
+              </div>
+
+              {/* Interest-free toggle */}
+              <button
+                onClick={() => setInterestFree(v => !v)}
+                className="flex items-center justify-between px-3 py-2.5 rounded-lg w-full transition-all"
+                style={{
+                  background: interestFree ? 'rgba(74,222,128,0.08)' : 'var(--bg-raised)',
+                  border: `1px solid ${interestFree ? 'rgba(74,222,128,0.25)' : 'var(--border)'}`,
+                }}>
+                <div className="text-left">
+                  <p className="text-xs font-mono font-semibold" style={{ color: interestFree ? 'var(--positive)' : 'var(--text-primary)' }}>
+                    Interest-free loan
+                  </p>
+                  <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                    {interestFree ? 'No interest will accrue — repayment only' : 'Interest charged each payslip'}
+                  </p>
+                </div>
+                <div
+                  className="w-10 h-5 rounded-full transition-all shrink-0"
+                  style={{
+                    background: interestFree ? 'var(--positive)' : 'var(--border-bright)',
+                    position: 'relative',
+                  }}
+                >
+                  <div
+                    className="absolute top-0.5 w-4 h-4 rounded-full transition-all"
+                    style={{
+                      background: '#fff',
+                      left: interestFree ? '22px' : '2px',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                    }}
+                  />
+                </div>
+              </button>
+
+              {amount && repay && Number(repay) > 0 && Number(amount) > 0 && (
+                <div className="flex items-center justify-between px-3 py-2 rounded-lg"
+                  style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
+                  <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>EMI</span>
+                  <span className="text-xs font-mono font-semibold" style={{ color: 'var(--warning)' }}>
+                    {fmt(Number(repay))}/wk · paid off in ~{Math.ceil(Number(amount) / Number(repay))} week{Math.ceil(Number(amount) / Number(repay)) > 1 ? 's' : ''}
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
+
+          {error && <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{error}</p>}
+
+          <button onClick={handleSubmit} disabled={saving}
+            className="w-full py-3 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
+            style={{
+              background: saving ? 'var(--border)' : tab === 'bonus' ? 'var(--accent-blue)' : 'rgba(251,191,36,0.15)',
+              border: tab === 'loan' ? '1px solid rgba(251,191,36,0.3)' : 'none',
+              color: saving ? 'var(--text-dim)' : tab === 'bonus' ? '#fff' : 'var(--warning)',
+            }}>
+            {saving ? 'Processing...' : tab === 'bonus'
+              ? `Give ${amount ? fmt(Number(amount)) : '—'} Bonus`
+              : `Give ${amount ? fmt(Number(amount)) : '—'} Loan`}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Run / Settle Payslip button ───────────────────────────────────────────────
+function RunPayslipButton({ child, periodEnd, onDone }) {
+  const [phase,       setPhase]       = useState('loading') // loading | run | draft | settled
+  const [running,     setRunning]     = useState(false)
+  const [draftId,     setDraftId]     = useState(null)
+  const [error,       setError]       = useState(null)
+  const [showPayslip, setShowPayslip] = useState(false)
+
+  // Check for existing payslip on mount
+  useEffect(() => {
+    getPayslipForPeriod(child.id, periodEnd).then(existing => {
+      if (!existing)                     setPhase('run')
+      else if (existing.status === 'draft') { setPhase('draft'); setDraftId(existing.id) }
+      else                               setPhase('settled')
+    })
+  }, [child.id, periodEnd])
+
+  const handleRun = async () => {
+    setRunning(true)
+    setError(null)
+    try {
+      const result = await runPayslip(child.id)
+      setDraftId(result.id)
+      setPhase('draft')
+      await onDone()
+    } catch (e) {
+      console.error('[Artha] runPayslip error:', e)
+      setError(e.message.includes('already exists') ? 'exists' : e.message)
     } finally {
       setRunning(false)
     }
   }
 
-  if (result === 'ok')     return <span className="text-xs font-mono" style={{ color: 'var(--positive)' }}>✓ Done</span>
-  if (result === 'exists') return <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Already run</span>
-  if (result === 'error')  return <span className="text-xs font-mono" style={{ color: 'var(--negative)' }}>Error</span>
+  const handleSettle = async (payslipId) => {
+    setRunning(true)
+    setError(null)
+    try {
+      await settlePayslip(payslipId ?? draftId)
+      setPhase('settled')
+      setShowPayslip(false)
+      await onDone()
+    } catch (e) {
+      console.error('[Artha] settlePayslip error:', e)
+      setError(e.message)
+    } finally {
+      setRunning(false)
+    }
+  }
 
+  const canRun = today() >= periodEnd
+
+  if (phase === 'loading') return null
+  if (phase === 'settled') return (
+    <span className="text-xs font-mono" style={{ color: 'var(--positive)' }}>✓ Settled</span>
+  )
+  if (error === 'exists') return (
+    <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Already run</span>
+  )
+  if (error) return (
+    <span className="text-xs font-mono" style={{ color: 'var(--negative)' }} title={error}>
+      Error: {error.slice(0, 40)}
+    </span>
+  )
+  if (phase === 'draft') return (
+    <>
+      <button onClick={() => setShowPayslip(true)}
+        className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono transition-all active:scale-95"
+        style={{ background: 'rgba(251,191,36,0.12)', border: '1px solid rgba(251,191,36,0.3)', color: 'var(--warning)' }}>
+        <CheckCircle size={11} />
+        Settle Pay
+      </button>
+      {showPayslip && (
+        <PayslipSheet
+          child={child}
+          onClose={() => setShowPayslip(false)}
+          onSettle={handleSettle}
+        />
+      )}
+    </>
+  )
+  if (!canRun) return (
+    <span className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
+      Payslip from {displayDate(periodEnd)}
+    </span>
+  )
   return (
-    <button
-      disabled={running}
-      onClick={handle}
+    <button disabled={running} onClick={handleRun}
       className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono transition-all active:scale-95"
-      style={{
-        background: 'rgba(74,222,128,0.12)',
-        border: '1px solid rgba(74,222,128,0.25)',
-        color: 'var(--positive)',
-      }}>
+      style={{ background: 'rgba(74,222,128,0.12)', border: '1px solid rgba(74,222,128,0.25)', color: 'var(--positive)' }}>
       <Play size={11} />
       {running ? 'Running...' : 'Run Payslip'}
     </button>
   )
 }
 
+// ── Chore completion mini-bars ────────────────────────────────────────────────
+function ChoreBar({ done, total, label = 'today' }) {
+  if (total === 0) return null
+  const pct = Math.round((done / total) * 100)
+  const color = pct === 100 ? 'var(--positive)' : pct >= 50 ? 'var(--warning)' : 'var(--negative)'
+  return (
+    <div className="flex items-center gap-2 mt-2">
+      <div className="flex-1 h-1.5 rounded-full overflow-hidden" style={{ background: 'var(--bg-raised)' }}>
+        <div className="h-full rounded-full transition-all duration-700"
+          style={{ width: `${pct}%`, background: color }} />
+      </div>
+      <span className="text-xs font-mono shrink-0" style={{ color: 'var(--text-muted)', fontSize: 10 }}>
+        {done}/{total} {label}
+      </span>
+    </div>
+  )
+}
+
+// ── Payslip viewer sheet ──────────────────────────────────────────────────────
+function PayslipSheet({ child, onClose, onSettle }) {
+  const [payslip,  setPayslip]  = useState(null)
+  const [loading,  setLoading]  = useState(true)
+  const [settling, setSettling] = useState(false)
+
+  useEffect(() => {
+    getPayslips(child.id).then(list => {
+      const sorted = [...list].sort((a, b) => b.periodEnd.localeCompare(a.periodEnd))
+      setPayslip(sorted[0] ?? null)
+      setLoading(false)
+    })
+  }, [child.id])
+
+  const handleSettle = async () => {
+    if (!payslip) return
+    setSettling(true)
+    try {
+      await onSettle(payslip.id)
+      onClose()
+    } finally {
+      setSettling(false)
+    }
+  }
+
+  const isDraft = payslip?.status === 'draft'
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end"
+      style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="rounded-t-2xl flex flex-col max-h-[85vh]"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        {/* Handle */}
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full" style={{ background: 'var(--border-bright)' }} />
+        </div>
+        {/* Header */}
+        <div className="flex items-center justify-between px-4 py-3 shrink-0"
+          style={{ borderBottom: '1px solid var(--border)' }}>
+          <div className="flex items-center gap-2">
+            <span className="text-xl">{child.avatar}</span>
+            <div>
+              <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+                {child.name} — Latest Payslip
+              </span>
+              {isDraft && (
+                <p className="text-xs font-mono" style={{ color: 'var(--warning)' }}>⏳ Pending settlement</p>
+              )}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ color: 'var(--text-muted)' }}><X size={18} /></button>
+        </div>
+
+        {/* Scrollable payslip */}
+        <div className="overflow-y-auto px-4 py-4 flex-1">
+          {loading && (
+            <p className="text-xs font-mono text-center py-8" style={{ color: 'var(--text-muted)' }}>Loading...</p>
+          )}
+          {!loading && !payslip && (
+            <p className="text-xs font-mono text-center py-8" style={{ color: 'var(--text-muted)' }}>No payslip yet</p>
+          )}
+          {!loading && payslip && (
+            <PayslipCard payslip={payslip} member={child} />
+          )}
+        </div>
+
+        {/* Settle actions — only shown for draft payslips */}
+        {isDraft && onSettle && (
+          <div className="px-4 py-4 flex flex-col gap-2 shrink-0"
+            style={{ borderTop: '1px solid var(--border)' }}>
+            {(() => {
+              const canSettle = payslip && today() >= payslip.periodEnd
+              return (
+                <>
+                  {!canSettle && (
+                    <p className="text-xs font-mono text-center" style={{ color: 'var(--text-muted)' }}>
+                      Settlement available from {displayDate(payslip.periodEnd)}
+                    </p>
+                  )}
+                  <div className="flex gap-3">
+                    <button onClick={onClose}
+                      className="flex-1 py-3 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
+                      style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                      Close
+                    </button>
+                    <button onClick={handleSettle} disabled={settling || !canSettle}
+                      className="flex-2 py-3 px-6 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
+                      style={{
+                        background: !canSettle ? 'var(--bg-raised)' : settling ? 'var(--border)' : 'rgba(74,222,128,0.15)',
+                        border: `1px solid ${!canSettle ? 'var(--border)' : 'rgba(74,222,128,0.35)'}`,
+                        color: !canSettle ? 'var(--text-dim)' : settling ? 'var(--text-dim)' : 'var(--positive)',
+                        cursor: !canSettle ? 'not-allowed' : 'pointer',
+                      }}>
+                      {settling ? 'Settling...' : '✓ Approve & Pay'}
+                    </button>
+                  </div>
+                </>
+              )
+            })()}
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Main ──────────────────────────────────────────────────────────────────────
 export default function ParentDashboard() {
   const { currentMember } = useAuth()
-  const { family, children, reload } = useFamily()
+  const { family, children, chores, reload } = useFamily()
   const navigate = useNavigate()
-  const payday = isPayday()
-  const periodEnd = currentPeriodEnd()
+  const fmt = useCurrency()
+  const { paydayToday: payday, periodEnd, label: periodLabel } = usePeriod()
+
+  const [choreStats,     setChoreStats]     = useState({})
+  const [periodStats,    setPeriodStats]    = useState({})
+  const [givingTo,       setGivingTo]       = useState(null)
+  const [viewPayslipFor, setViewPayslipFor] = useState(null)
+  const [autoRanToday,   setAutoRanToday]   = useState(false)
+  const [overdueDrafts,  setOverdueDrafts]  = useState([])
+  const autoRanRef = useRef(false)
+
+  // Auto-payslip: run once on mount if enabled and it's payday
+  useEffect(() => {
+    if (!family?.config?.autoPayslip || !payday || autoRanRef.current) return
+    autoRanRef.current = true
+    const autoRun = async () => {
+      const tier2 = children.filter(c => c.tier >= 2)
+      if (tier2.length === 0) return
+      await Promise.allSettled(tier2.map(c => runPayslip(c.id)))
+      await reload()
+      setAutoRanToday(true)
+    }
+    autoRun()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [family, payday, children.length])
+
+  const loadChoreStats = useCallback(async () => {
+    if (!children.length || !chores.length) return
+    const dateStr = today()
+    const stats = {}
+    await Promise.all(children.map(async (child) => {
+      const dueChores = getDueChoresForMember(chores, child.id)
+      if (dueChores.length === 0) { stats[child.id] = { done: 0, total: 0 }; return }
+      const logs = await getChoreLogsForDate(child.id, dateStr)
+      const logMap = buildLogMap(logs)
+      const done = dueChores.filter(c => {
+        const log = logMap[c.id]
+        return log && (log.status === 'approved' || log.status === 'pending')
+      }).length
+      stats[child.id] = { done, total: dueChores.length }
+    }))
+    setChoreStats(stats)
+  }, [children, chores])
+
+  useEffect(() => { loadChoreStats() }, [loadChoreStats])
+
+  // Period-wide mandatory chore completion
+  const loadPeriodStats = useCallback(async () => {
+    if (!children.length || !chores.length || !family) return
+    const pStart = currentPeriodStart(family.config)
+    const pEnd   = currentPeriodEnd(family.config)
+
+    // All calendar days in the period (not just days the child logged)
+    const allDates = []
+    let cur = new Date(pStart + 'T12:00:00')
+    const end = new Date(pEnd + 'T12:00:00')
+    while (cur <= end) {
+      allDates.push(cur.toISOString().slice(0, 10))
+      cur = new Date(cur.getTime() + 86400000)
+    }
+
+    const stats = {}
+    await Promise.all(children.map(async (child) => {
+      const mandatory = chores.filter(c =>
+        c.type === 'mandatory' && c.isActive && c.assignedTo.includes(child.id)
+      )
+      if (!mandatory.length) { stats[child.id] = { approved: 0, expected: 0 }; return }
+      const logs = await getChoreLogsForPeriod(child.id, pStart, pEnd)
+      let totalExpected = 0
+      let totalApproved = 0
+      for (const chore of mandatory) {
+        let exp = 0, app = 0
+        for (const date of allDates) {
+          const day = new Date(date + 'T12:00:00').getDay()
+          let due = false
+          switch (chore.recurrence) {
+            case 'daily':   due = true; break
+            case 'weekday': due = day >= 1 && day <= 5; break
+            case 'weekend': due = day === 0 || day === 6; break
+            case 'weekly':  due = day === 1; break
+            case 'custom':  due = true; break
+          }
+          if (due) {
+            exp++
+            if (logs.some(l => l.choreId === chore.id && l.date === date && l.status === 'approved')) app++
+          }
+        }
+        if (chore.recurrence === 'custom') {
+          exp = Math.min(exp, chore.daysPerWeek ?? 3)
+          app = Math.min(app, chore.daysPerWeek ?? 3)
+        }
+        totalExpected += exp
+        totalApproved += app
+      }
+      stats[child.id] = { approved: totalApproved, expected: totalExpected }
+    }))
+    setPeriodStats(stats)
+  }, [children, chores, family])
+
+  useEffect(() => { loadPeriodStats() }, [loadPeriodStats])
+
+  // Check for draft payslips whose period has ended
+  useEffect(() => {
+    const tier2Ids = children.filter(c => c.tier >= 2).map(c => c.id)
+    if (!tier2Ids.length) return
+    getOverdueDrafts(tier2Ids, periodEnd).then(setOverdueDrafts)
+  }, [children])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -70,12 +609,35 @@ export default function ParentDashboard() {
 
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
         {/* Payday banner */}
-        {payday && (
+        {payday && !autoRanToday && (
           <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
             style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)' }}>
             <AlertCircle size={14} style={{ color: 'var(--positive)', flexShrink: 0 }} />
             <p className="text-xs font-mono" style={{ color: 'var(--positive)' }}>
-              It's payday! Run payslips for each child below.
+              It's payday! Run payslips for each child below. ({periodLabel} end)
+            </p>
+          </div>
+        )}
+        {autoRanToday && (
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+            style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)' }}>
+            <AlertCircle size={14} style={{ color: 'var(--positive)', flexShrink: 0 }} />
+            <p className="text-xs font-mono" style={{ color: 'var(--positive)' }}>
+              Payslips drafted ✓ — tap "Settle Pay" for each child below to release funds.
+            </p>
+          </div>
+        )}
+
+        {/* Overdue settlements banner */}
+        {overdueDrafts.length > 0 && (
+          <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
+            style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)' }}>
+            <AlertCircle size={14} style={{ color: 'var(--warning)', flexShrink: 0 }} />
+            <p className="text-xs font-mono" style={{ color: 'var(--warning)' }}>
+              {overdueDrafts.length === 1
+                ? `${children.find(c => c.id === overdueDrafts[0].memberId)?.name ?? 'A child'} has an unsettled payslip — tap "Settle Pay" to release funds.`
+                : `${overdueDrafts.length} unsettled payslips are ready — tap "Settle Pay" for each child.`
+              }
             </p>
           </div>
         )}
@@ -87,47 +649,132 @@ export default function ParentDashboard() {
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-mono mb-1" style={{ color: 'var(--text-muted)' }}>FAMILY TAX FUND</p>
             <p className="text-2xl font-mono font-bold" style={{ color: 'var(--positive)' }}>
-              {formatRupees(family.taxFundBalance)}
+              {fmt(family.taxFundBalance)}
             </p>
           </button>
         )}
 
         {/* Children cards */}
         <p className="text-xs font-mono px-1" style={{ color: 'var(--text-muted)' }}>CHILDREN</p>
-        {children.map(child => (
-          <div key={child.id} className="p-4 rounded-xl"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <div className="flex items-center justify-between mb-3">
-              <div className="flex items-center gap-3">
+        {children.map(child => {
+          const stats = choreStats[child.id]
+          const loanOutstanding = child.accounts?.loan?.outstanding ?? 0
+          return (
+            <div key={child.id} className="p-4 rounded-xl"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+              {/* Name row */}
+              <div className="flex items-center gap-3 mb-2">
                 <span className="text-3xl">{child.avatar}</span>
                 <div>
-                  <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
-                    {child.name}
-                  </p>
+                  <div className="flex items-center gap-2">
+                    <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+                      {child.name}
+                    </p>
+                    {child.tier >= 2 && (() => {
+                      const score = child.creditScore ?? 500
+                      const color = score >= 700 ? 'var(--positive)' : score >= 500 ? 'var(--warning)' : 'var(--negative)'
+                      const bg    = score >= 700 ? 'rgba(74,222,128,0.1)' : score >= 500 ? 'rgba(251,191,36,0.1)' : 'rgba(239,68,68,0.1)'
+                      return (
+                        <span className="text-xs font-mono px-1.5 py-0.5 rounded-full"
+                          style={{ background: bg, color, border: `1px solid ${bg}` }}>
+                          {score}
+                        </span>
+                      )
+                    })()}
+                  </div>
                   <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-                    Tier {child.tier} · {formatRupees(child.baseSalary)}/wk
+                    Tier {child.tier} · {fmt(child.baseSalary)}/{periodLabel}
                   </p>
                 </div>
               </div>
-              <RunPayslipButton child={child} onDone={reload} />
-            </div>
 
-            {/* Balances */}
-            <div className="grid grid-cols-3 gap-2">
-              {[
-                { label: 'SPENDING', value: child.accounts?.spending  ?? 0, color: 'var(--positive)' },
-                { label: 'SAVINGS',  value: child.accounts?.savings   ?? 0, color: 'var(--accent-blue)' },
-                { label: 'GOAL JAR', value: child.accounts?.goalJar?.balance ?? 0, color: 'var(--warning)' },
-              ].map(({ label, value, color }) => (
-                <div key={label} className="p-2 rounded-lg text-center" style={{ background: 'var(--bg-raised)' }}>
-                  <p className="text-xs font-mono" style={{ color: 'var(--text-muted)', fontSize: '9px' }}>{label}</p>
-                  <p className="text-sm font-mono font-semibold mt-0.5" style={{ color }}>{formatRupees(value)}</p>
+              {/* Actions row */}
+              {child.tier >= 2 && (
+                <div className="flex items-center gap-2 mb-3">
+                  <RunPayslipButton child={child} periodEnd={periodEnd} onDone={reload} />
+                  <button
+                    onClick={() => setViewPayslipFor(child)}
+                    className="p-1.5 rounded-lg transition-all active:scale-95"
+                    style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+                    title="View latest payslip">
+                    <FileText size={14} />
+                  </button>
+                  <button
+                    onClick={() => setGivingTo(child)}
+                    className="p-1.5 rounded-lg transition-all active:scale-95"
+                    style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+                    title="Give bonus or loan">
+                    <Plus size={14} />
+                  </button>
                 </div>
-              ))}
+              )}
+
+              {/* Outstanding loan chip */}
+              {loanOutstanding > 0 && (
+                <div className="flex items-center gap-1.5 mb-2 px-2 py-1 rounded-lg w-fit"
+                  style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
+                  <span className="text-xs font-mono" style={{ color: 'var(--warning)' }}>
+                    🤝 Loan: {fmt(loanOutstanding)} outstanding
+                  </span>
+                </div>
+              )}
+
+              {/* Chore bars */}
+              {stats && <ChoreBar done={stats.done} total={stats.total} label="today" />}
+              {periodStats[child.id] && (
+                <ChoreBar
+                  done={periodStats[child.id].approved}
+                  total={periodStats[child.id].expected}
+                  label={`this ${periodLabel}`}
+                />
+              )}
+
+              {/* Balances (Tier 2+) */}
+              {child.tier >= 2 && (
+                <div className="grid grid-cols-3 gap-2 mt-3">
+                  {[
+                    { label: 'SPENDING', value: child.accounts?.spending ?? 0,           color: 'var(--positive)' },
+                    { label: 'SAVINGS',  value: child.accounts?.savings  ?? 0,           color: 'var(--accent-blue)' },
+                    { label: 'GOAL JAR', value: child.accounts?.goalJar?.balance ?? 0,  color: 'var(--warning)' },
+                  ].map(({ label, value, color }) => (
+                    <div key={label} className="p-2 rounded-lg text-center" style={{ background: 'var(--bg-raised)' }}>
+                      <p className="text-xs font-mono" style={{ color: 'var(--text-muted)', fontSize: '9px' }}>{label}</p>
+                      <p className="text-sm font-mono font-semibold mt-0.5" style={{ color }}>{fmt(value)}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {/* Tier 1 — goal jar only */}
+              {child.tier === 1 && child.accounts?.goalJar && (
+                <div className="mt-3 p-2 rounded-lg text-center" style={{ background: 'var(--bg-raised)' }}>
+                  <p className="text-xs font-mono" style={{ color: 'var(--text-muted)', fontSize: '9px' }}>GOAL JAR</p>
+                  <p className="text-sm font-mono font-semibold mt-0.5" style={{ color: 'var(--warning)' }}>
+                    {fmt(child.accounts.goalJar.balance)} / {fmt(child.accounts.goalJar.target)}
+                  </p>
+                </div>
+              )}
             </div>
-          </div>
-        ))}
+          )
+        })}
       </div>
+
+      {/* Give Money sheet */}
+      {givingTo && (
+        <GiveMoneySheet
+          child={givingTo}
+          onDone={reload}
+          onClose={() => setGivingTo(null)}
+        />
+      )}
+
+      {/* Payslip viewer sheet */}
+      {viewPayslipFor && (
+        <PayslipSheet
+          child={viewPayslipFor}
+          onClose={() => setViewPayslipFor(null)}
+        />
+      )}
     </div>
   )
 }

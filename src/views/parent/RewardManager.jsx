@@ -3,7 +3,7 @@ import { Plus, X, Check, Pencil, ToggleLeft, ToggleRight } from 'lucide-react'
 import { useFamily } from '../../context/FamilyContext'
 import { addReward, updateReward, getAllRewards } from '../../db/operations'
 import { REWARD_CATEGORIES, FAMILY_ID } from '../../utils/constants'
-import { formatRupees } from '../../utils/currency'
+import { useCurrency } from '../../context/FamilyContext'
 
 // ── Reward form ───────────────────────────────────────────────────────────────
 function RewardForm({ initial, onSave, onClose }) {
@@ -114,6 +114,7 @@ function RewardForm({ initial, onSave, onClose }) {
 
 // ── Reward row ────────────────────────────────────────────────────────────────
 function RewardRow({ reward, onEdit, onToggle }) {
+  const fmt = useCurrency()
   const meta = REWARD_CATEGORIES[reward.category]
   return (
     <div className="flex items-center gap-3 px-3 py-3 rounded-xl"
@@ -122,7 +123,7 @@ function RewardRow({ reward, onEdit, onToggle }) {
       <div className="flex-1 min-w-0">
         <p className="text-sm font-mono truncate" style={{ color: 'var(--text-primary)' }}>{reward.title}</p>
         <div className="flex items-center gap-2 mt-0.5">
-          <span className="text-xs font-mono" style={{ color: 'var(--positive)' }}>{formatRupees(reward.price)}</span>
+          <span className="text-xs font-mono" style={{ color: 'var(--positive)' }}>{fmt(reward.price)}</span>
           <span className="text-xs font-mono px-1.5 py-0.5 rounded"
             style={{ background: 'var(--bg-base)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
             {meta?.label ?? reward.category}

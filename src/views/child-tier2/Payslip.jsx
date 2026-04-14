@@ -4,12 +4,14 @@ import { useFamily } from '../../context/FamilyContext'
 import { getPayslips } from '../../db/operations'
 import PayslipCard from '../../components/PayslipCard'
 import { displayDate } from '../../utils/dates'
-import { formatRupees } from '../../utils/currency'
+import { useCurrency, usePeriod } from '../../context/FamilyContext'
 import { ChevronDown, ChevronUp } from 'lucide-react'
 
 export default function Payslip() {
   const { currentMember } = useAuth()
-  const { family } = useFamily()
+  const { family, reloadCount } = useFamily()
+  const fmt = useCurrency()
+  const { label: periodLabel } = usePeriod()
   const [payslips, setPayslips] = useState([])
   const [loading, setLoading]   = useState(true)
   const [expanded, setExpanded] = useState(null) // payslip id shown in full
@@ -17,12 +19,11 @@ export default function Payslip() {
   useEffect(() => {
     if (!currentMember) return
     getPayslips(currentMember.id).then(p => {
-      // newest first
       const sorted = [...p].sort((a, b) => b.periodEnd.localeCompare(a.periodEnd))
       setPayslips(sorted)
       setLoading(false)
     })
-  }, [currentMember])
+  }, [currentMember, reloadCount])
 
   const latest   = payslips[0]
   const archived = payslips.slice(1)
@@ -60,11 +61,21 @@ export default function Payslip() {
       <div className="px-4 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
         <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>PAYSLIP</p>
         <h2 className="text-base font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
-          Week ending {displayDate(latest.periodEnd)}
+          {periodLabel === 'month' ? 'Month' : 'Week'} ending {displayDate(latest.periodEnd)}
         </h2>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
+        {/* Draft badge */}
+        {latest.status === 'draft' && (
+          <div className="flex items-center gap-2 px-3 py-2 rounded-xl"
+            style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.25)' }}>
+            <span className="text-xs font-mono" style={{ color: 'var(--warning)' }}>
+              ⏳ Pending settlement — your parent hasn't released this payment yet
+            </span>
+          </div>
+        )}
+
         {/* Latest payslip */}
         <PayslipCard
           payslip={latest}
@@ -93,7 +104,7 @@ export default function Payslip() {
                       {displayDate(p.periodStart)} – {displayDate(p.periodEnd)}
                     </p>
                     <p className="text-sm font-mono font-bold mt-0.5" style={{ color: 'var(--positive)' }}>
-                      {formatRupees(p.net)} net
+                      {fmt(p.net)} net
                     </p>
                   </div>
                   {expanded === p.id

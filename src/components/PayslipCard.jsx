@@ -1,4 +1,5 @@
 import { displayDateFull } from '../utils/dates'
+import { useCurrency } from '../context/FamilyContext'
 
 // ── Terminal primitives ───────────────────────────────────────────────────────
 
@@ -79,16 +80,14 @@ function TermBar({ value, max = 1, width = 16 }) {
   )
 }
 
-function fmt(n) {
-  if (n === undefined || n === null) return '₹0.00'
-  const abs = Math.abs(n)
-  const sign = n < 0 ? '−' : ''
-  return `${sign}₹${abs.toFixed(2)}`
-}
-
 // ── Main PayslipCard ──────────────────────────────────────────────────────────
 
 export default function PayslipCard({ payslip, member, familyName }) {
+  const fmtCurr = useCurrency()
+  const fmt = (n) => {
+    if (n == null) return fmtCurr(0, { forceDecimals: true })
+    return (n < 0 ? '−' : '') + fmtCurr(Math.abs(n), { forceDecimals: true })
+  }
   if (!payslip) return null
   const { earnings, deductions, gross, totalDeductions, net, allocations, interestEarned } = payslip
 
@@ -128,6 +127,11 @@ export default function PayslipCard({ payslip, member, familyName }) {
           <TermBar value={earnings.mandatoryCompletionPercent} max={1} width={14} />
         </div>
         <Row label="Adjusted Salary"  value={fmt(earnings.adjustedSalary)} positive={earnings.adjustedSalary > 0} />
+        {earnings.streakBonus > 0 && (
+          <Row
+            label={`🔥 Streak bonus (${earnings.streakDays}d · +${Math.round(earnings.streakBonusPct * 100)}%)`}
+            value={fmt(earnings.streakBonus)} positive indent />
+        )}
         {earnings.bonusItems?.map((b, i) => (
           <Row key={i} label={`+ ${b.title}`} value={fmt(b.total)} positive indent />
         ))}
@@ -148,6 +152,12 @@ export default function PayslipCard({ payslip, member, familyName }) {
         {deductions.utilities?.map((u, i) => (
           <Row key={i} label={u.reason} value={fmt(-u.amount)} negative indent />
         ))}
+        {deductions.loanInterest > 0 && (
+          <Row label="Loan Interest (→ balance)" value={`+${fmt(deductions.loanInterest)}`} dim indent />
+        )}
+        {deductions.loanRepayment > 0 && (
+          <Row label="Loan Repayment" value={fmt(-deductions.loanRepayment)} negative />
+        )}
         <Divider char="·" />
         <Row label="TOTAL DEDUCTIONS" value={fmt(-totalDeductions)} bold negative={totalDeductions > 0} />
       </div>

@@ -1,0 +1,270 @@
+import { useState, useRef } from 'react'
+import { Download, Upload, AlertTriangle, CheckCircle, Cloud } from 'lucide-react'
+import { exportAllData, importAllData } from '../../db/operations'
+import { migrateToSupabase } from '../../db/migrate'
+import { useFamily } from '../../context/FamilyContext'
+import { FAMILY_ID } from '../../utils/constants'
+
+export default function Backup() {
+  const { reload } = useFamily()
+  const fileRef = useRef(null)
+
+  const [exporting,  setExporting]  = useState(false)
+  const [importing,  setImporting]  = useState(false)
+  const [migrating,  setMigrating]  = useState(false)
+  const [pendingData, setPendingData] = useState(null) // parsed import payload
+  const [status, setStatus]     = useState(null)       // { type: 'ok'|'error', msg }
+
+  // ── Migrate from local device → Supabase ────────────────────────────────────
+  const handleMigrate = async () => {
+    setMigrating(true)
+    setStatus(null)
+    try {
+      const counts = await migrateToSupabase()
+      await reload()
+      setStatus({ type: 'ok', msg: `Migration complete! ${counts.members} members, ${counts.chores} chores, ${counts.transactions} transactions moved to cloud.` })
+    } catch (e) {
+      setStatus({ type: 'error', msg: `Migration failed: ${e.message}` })
+    }
+    setMigrating(false)
+  }
+
+  // ── Export ──────────────────────────────────────────────────────────────────
+  const handleExport = async () => {
+    setExporting(true)
+    setStatus(null)
+    try {
+      const data = await exportAllData(FAMILY_ID)
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url  = URL.createObjectURL(blob)
+      const a    = document.createElement('a')
+      const date = new Date().toISOString().slice(0, 10)
+      a.href     = url
+      a.download = `artha-backup-${date}.json`
+      a.click()
+      URL.revokeObjectURL(url)
+      setStatus({ type: 'ok', msg: 'Backup downloaded successfully.' })
+    } catch (e) {
+      setStatus({ type: 'error', msg: `Export failed: ${e.message}` })
+    }
+    setExporting(false)
+  }
+
+  // ── Import — step 1: pick file ────────────────────────────────────────────
+  const handleFileChange = async (e) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+    setStatus(null)
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text)
+      if (!data.version || !data.families || !data.members) {
+        throw new Error('Not a valid Artha backup file.')
+      }
+      setPendingData(data)
+    } catch (err) {
+      setStatus({ type: 'error', msg: `Could not read file: ${err.message}` })
+    }
+    // Reset input so same file can be re-selected
+    e.target.value = ''
+  }
+
+  // ── Import — step 2: confirm ───────────────────────────────────────────────
+  const handleConfirmImport = async () => {
+    if (!pendingData) return
+    setImporting(true)
+    setStatus(null)
+    try {
+      await importAllData(pendingData)
+      await reload()
+      setStatus({ type: 'ok', msg: 'Restore complete! All data has been replaced.' })
+    } catch (err) {
+      setStatus({ type: 'error', msg: `Restore failed: ${err.message}` })
+    }
+    setPendingData(null)
+    setImporting(false)
+  }
+
+  const familyCount  = pendingData?.families?.length  ?? 0
+  const memberCount  = pendingData?.members?.length   ?? 0
+  const payslipCount = pendingData?.payslips?.length  ?? 0
+  const txCount      = pendingData?.transactions?.length ?? 0
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
+      {/* Header */}
+      <div className="px-4 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+        <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>PARENT</p>
+        <h2 className="text-base font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+          Backup & Restore
+        </h2>
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-4 py-5 flex flex-col gap-4">
+
+        {/* Status banner */}
+        {status && (
+          <div className="flex items-start gap-3 px-4 py-3 rounded-xl"
+            style={{
+              background: status.type === 'ok' ? 'rgba(74,222,128,0.08)' : 'rgba(248,113,113,0.08)',
+              border: `1px solid ${status.type === 'ok' ? 'rgba(74,222,128,0.25)' : 'rgba(248,113,113,0.25)'}`,
+            }}>
+            {status.type === 'ok'
+              ? <CheckCircle size={16} style={{ color: 'var(--positive)', flexShrink: 0, marginTop: 1 }} />
+              : <AlertTriangle size={16} style={{ color: 'var(--negative)', flexShrink: 0, marginTop: 1 }} />
+            }
+            <p className="text-xs font-mono" style={{ color: status.type === 'ok' ? 'var(--positive)' : 'var(--negative)' }}>
+              {status.msg}
+            </p>
+          </div>
+        )}
+
+        {/* Migration card — move local IndexedDB data to Supabase */}
+        <div className="flex flex-col gap-3 p-4 rounded-xl"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          <div className="flex items-start gap-3">
+            <Cloud size={18} style={{ color: 'var(--positive)', flexShrink: 0, marginTop: 2 }} />
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>Migrate to cloud</p>
+              <p className="text-xs font-mono leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                First-time setup: copies all data from this device's local storage to Supabase so it syncs across devices. Run once.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleMigrate}
+            disabled={migrating}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
+            style={{
+              background: migrating ? 'var(--bg-raised)' : 'rgba(74,222,128,0.15)',
+              border: '1px solid rgba(74,222,128,0.3)',
+              color: 'var(--positive)',
+            }}>
+            <Cloud size={15} />
+            {migrating ? 'Migrating...' : 'Migrate Local Data to Cloud'}
+          </button>
+        </div>
+
+        {/* Export card */}
+        <div className="flex flex-col gap-3 p-4 rounded-xl"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          <div className="flex items-start gap-3">
+            <Download size={18} style={{ color: 'var(--accent-blue)', flexShrink: 0, marginTop: 2 }} />
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>Export backup</p>
+              <p className="text-xs font-mono leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                Downloads all family data as a JSON file — members, chores, payslips, transactions, rewards, everything.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={handleExport}
+            disabled={exporting}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
+            style={{
+              background: exporting ? 'var(--bg-raised)' : 'var(--accent-blue)',
+              color: '#fff',
+              border: 'none',
+            }}>
+            <Download size={15} />
+            {exporting ? 'Exporting...' : 'Download Backup'}
+          </button>
+        </div>
+
+        {/* Import card */}
+        <div className="flex flex-col gap-3 p-4 rounded-xl"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          <div className="flex items-start gap-3">
+            <Upload size={18} style={{ color: 'var(--warning)', flexShrink: 0, marginTop: 2 }} />
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>Restore from backup</p>
+              <p className="text-xs font-mono leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                Replaces ALL current data with a backup file. This cannot be undone — export a backup first.
+              </p>
+            </div>
+          </div>
+
+          {/* Warning notice */}
+          <div className="flex items-center gap-2 px-3 py-2 rounded-lg"
+            style={{ background: 'rgba(251,191,36,0.08)', border: '1px solid rgba(251,191,36,0.2)' }}>
+            <AlertTriangle size={13} style={{ color: 'var(--warning)', flexShrink: 0 }} />
+            <p className="text-xs font-mono" style={{ color: 'var(--warning)' }}>
+              All current data will be permanently overwritten.
+            </p>
+          </div>
+
+          <input
+            ref={fileRef}
+            type="file"
+            accept=".json,application/json"
+            className="hidden"
+            onChange={handleFileChange}
+          />
+          <button
+            onClick={() => fileRef.current?.click()}
+            disabled={importing || !!pendingData}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
+            style={{
+              background: 'rgba(251,191,36,0.1)',
+              border: '1px solid rgba(251,191,36,0.3)',
+              color: 'var(--warning)',
+            }}>
+            <Upload size={15} />
+            Choose Backup File
+          </button>
+        </div>
+
+        {/* Confirm import dialog */}
+        {pendingData && (
+          <div className="flex flex-col gap-4 p-4 rounded-xl"
+            style={{ background: 'rgba(248,113,113,0.06)', border: '1px solid rgba(248,113,113,0.3)' }}>
+            <p className="text-sm font-mono font-semibold" style={{ color: 'var(--negative)' }}>
+              Confirm Restore
+            </p>
+
+            <div className="grid grid-cols-2 gap-2">
+              {[
+                { label: 'Families',     val: familyCount },
+                { label: 'Members',      val: memberCount },
+                { label: 'Payslips',     val: payslipCount },
+                { label: 'Transactions', val: txCount },
+              ].map(({ label, val }) => (
+                <div key={label} className="flex flex-col px-3 py-2 rounded-lg"
+                  style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
+                  <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{label.toUpperCase()}</span>
+                  <span className="text-base font-mono font-bold" style={{ color: 'var(--text-primary)' }}>{val}</span>
+                </div>
+              ))}
+            </div>
+
+            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+              Exported: {new Date(pendingData.exportedAt).toLocaleString()}
+            </p>
+
+            <div className="flex gap-3">
+              <button
+                onClick={() => setPendingData(null)}
+                className="flex-1 py-2.5 rounded-xl text-sm font-mono transition-all active:scale-95"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmImport}
+                disabled={importing}
+                className="flex-1 py-2.5 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
+                style={{ background: 'rgba(248,113,113,0.2)', border: '1px solid rgba(248,113,113,0.4)', color: 'var(--negative)' }}>
+                {importing ? 'Restoring...' : 'Restore Now'}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Info footer */}
+        <p className="text-xs font-mono text-center px-4" style={{ color: 'var(--text-dim)' }}>
+          Data is synced to Supabase and accessible from any device.{'\n'}
+          JSON backups are extra insurance against accidental data loss.
+        </p>
+      </div>
+    </div>
+  )
+}

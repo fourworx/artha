@@ -1,25 +1,29 @@
 import { useState, useEffect } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { getTransactions } from '../../db/operations'
-import { formatRupees } from '../../utils/currency'
+import { useCurrency } from '../../context/FamilyContext'
 import { displayDateFull } from '../../utils/dates'
 
 const TYPE_META = {
-  salary:     { label: 'Salary',     emoji: '💼', color: 'var(--positive)'  },
-  bonus:      { label: 'Bonus',      emoji: '⚡', color: 'var(--positive)'  },
-  interest:   { label: 'Interest',   emoji: '📈', color: 'var(--positive)'  },
-  deposit:    { label: 'Deposit',    emoji: '🏦', color: 'var(--positive)'  },
-  tax:        { label: 'Tax',        emoji: '🏛',  color: 'var(--negative)' },
-  rent:       { label: 'Rent',       emoji: '🏠', color: 'var(--negative)'  },
-  utility:    { label: 'Utility',    emoji: '⚡', color: 'var(--negative)'  },
-  reward:     { label: 'Reward',     emoji: '🎁', color: 'var(--negative)'  },
-  withdrawal: { label: 'Withdrawal', emoji: '💸', color: 'var(--negative)'  },
+  salary:       { label: 'Salary',          emoji: '💼', color: 'var(--positive)' },
+  bonus:        { label: 'Bonus',           emoji: '⚡', color: 'var(--positive)' },
+  parent_bonus: { label: 'Bonus from parent', emoji: '🎁', color: 'var(--positive)' },
+  loan_credit:  { label: 'Loan received',   emoji: '🤝', color: 'var(--positive)' },
+  interest:     { label: 'Interest',        emoji: '📈', color: 'var(--positive)' },
+  deposit:      { label: 'Deposit',         emoji: '🏦', color: 'var(--positive)' },
+  tax:          { label: 'Tax',             emoji: '🏛',  color: 'var(--negative)' },
+  rent:         { label: 'Rent',            emoji: '🏠', color: 'var(--negative)' },
+  utility:      { label: 'Utility',         emoji: '💡', color: 'var(--negative)' },
+  reward:       { label: 'Reward',          emoji: '🛍', color: 'var(--negative)' },
+  loan_repay:   { label: 'Loan repayment',  emoji: '🔄', color: 'var(--negative)' },
+  withdrawal:   { label: 'Withdrawal',      emoji: '💸', color: 'var(--negative)' },
 }
 
 const FILTERS = ['all', 'income', 'deductions']
 
 export default function History() {
   const { currentMember } = useAuth()
+  const fmt = useCurrency()
   const [transactions, setTransactions] = useState([])
   const [loading, setLoading]           = useState(true)
   const [filter, setFilter]             = useState('all')
@@ -102,7 +106,7 @@ export default function History() {
                     </p>
                   </div>
                   <span className="text-sm font-mono font-semibold shrink-0" style={{ color: meta.color }}>
-                    {isPositive ? '+' : ''}{formatRupees(tx.amount)}
+                    {isPositive ? '+' : ''}{fmt(tx.amount)}
                   </span>
                 </div>
               )

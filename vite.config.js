@@ -5,7 +5,7 @@ import { VitePWA } from 'vite-plugin-pwa'
 
 export default defineConfig({
   build: {
-    chunkSizeWarningLimit: 800, // Recharts is large; acceptable for prototype
+    chunkSizeWarningLimit: 900, // Recharts is large; acceptable for prototype
   },
   plugins: [
     react(),

@@ -1,15 +1,23 @@
-import { NavLink } from 'react-router-dom'
-import { Home, CheckSquare, FileText, Gift, Clock } from 'lucide-react'
+import { NavLink, useNavigate } from 'react-router-dom'
+import { Home, CheckSquare, FileText, Clock, LogOut } from 'lucide-react'
+import { useAuth } from '../context/AuthContext'
 
 const items = [
   { to: '/child/home',    label: 'Home',    Icon: Home,        end: true },
   { to: '/child/chores',  label: 'Chores',  Icon: CheckSquare },
-  { to: '/child/payslip', label: 'Payslip', Icon: FileText },
-  { to: '/child/rewards', label: 'Rewards', Icon: Gift },
+  { to: '/child/ledger',  label: 'Ledger',  Icon: FileText },
   { to: '/child/history', label: 'History', Icon: Clock },
 ]
 
 export default function ChildNav() {
+  const { logout } = useAuth()
+  const navigate   = useNavigate()
+
+  const handleLogout = () => {
+    logout()
+    navigate('/', { replace: true })
+  }
+
   return (
     <nav
       className="flex shrink-0"
@@ -32,6 +40,14 @@ export default function ChildNav() {
           <span className="text-xs font-mono">{label}</span>
         </NavLink>
       ))}
+      <button
+        onClick={handleLogout}
+        className="flex-1 flex flex-col items-center justify-center py-2 gap-1"
+        style={{ color: 'var(--text-muted)', background: 'none', border: 'none' }}
+      >
+        <LogOut size={20} />
+        <span className="text-xs font-mono">Exit</span>
+      </button>
     </nav>
   )
 }

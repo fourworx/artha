@@ -1,3 +1,4 @@
+import { format, subDays, getDay } from 'date-fns'
 import { isDueToday } from '../utils/dates'
 
 /**
@@ -44,6 +45,65 @@ export function mandatoryCompletionPercent(dueChoreIds, approvedChoreIds) {
   const approvedSet = new Set(approvedChoreIds)
   const approved = dueChoreIds.filter(id => approvedSet.has(id)).length
   return approved / dueChoreIds.length
+}
+
+/**
+ * Calculate the current chore streak for a member.
+ * A streak is the number of consecutive days (going back from yesterday)
+ * where every mandatory chore that was due was also approved.
+ * Days with no due chores are skipped (don't break or count the streak).
+ *
+ * @param {Array} choreLogs - All chore logs for the past 60 days
+ * @param {Array} mandatoryChores - Active mandatory chores assigned to the member
+ * @returns {number} streak in days
+ */
+export function calculateStreak(choreLogs, mandatoryChores) {
+  if (mandatoryChores.length === 0) return 0
+
+  // Build a map: date → Set of approved choreIds
+  const approvedByDate = {}
+  for (const log of choreLogs) {
+    if (log.status !== 'approved') continue
+    if (!approvedByDate[log.date]) approvedByDate[log.date] = new Set()
+    approvedByDate[log.date].add(log.choreId)
+  }
+
+  let streak = 0
+  let day = subDays(new Date(), 1) // start from yesterday
+
+  for (let i = 0; i < 60; i++) {
+    const dateStr  = format(day, 'yyyy-MM-dd')
+    const dow      = getDay(day)
+
+    // Which chores were due on this day?
+    const dueIds = mandatoryChores
+      .filter(c => {
+        if (!c.isActive) return false
+        switch (c.recurrence) {
+          case 'daily':   return true
+          case 'weekday': return dow >= 1 && dow <= 5
+          case 'weekend': return dow === 0 || dow === 6
+          case 'weekly':  return dow === 1
+          case 'custom':  return true
+          default:        return false
+        }
+      })
+      .map(c => c.id)
+
+    if (dueIds.length === 0) {
+      // No chores due — skip this day without breaking streak
+      day = subDays(day, 1)
+      continue
+    }
+
+    const approvedSet = approvedByDate[dateStr] ?? new Set()
+    if (!dueIds.every(id => approvedSet.has(id))) break
+
+    streak++
+    day = subDays(day, 1)
+  }
+
+  return streak
 }
 
 /**

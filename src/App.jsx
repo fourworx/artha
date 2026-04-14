@@ -5,6 +5,7 @@ import { FamilyProvider, useFamily } from './context/FamilyContext'
 import { getPendingLogsForMembers } from './db/operations'
 import ParentNav from './components/ParentNav'
 import ChildNav from './components/ChildNav'
+import InstallPrompt from './components/InstallPrompt'
 
 // Auth
 import PinAuth from './auth/PinAuth'
@@ -18,11 +19,14 @@ import EconomicControls from './views/parent/EconomicControls'
 import RewardManager    from './views/parent/RewardManager'
 import TaxFund          from './views/parent/TaxFund'
 import More             from './views/parent/More'
+import Backup           from './views/parent/Backup'
+import Members          from './views/parent/Members'
+import Loans            from './views/parent/Loans'
 
 // Child Tier 2 views
 import Tier2Home  from './views/child-tier2/Home'
 import Chores     from './views/child-tier2/Chores'
-import Payslip    from './views/child-tier2/Payslip'
+import Ledger     from './views/child-tier2/Ledger'
 import Savings    from './views/child-tier2/Savings'
 import GoalJar    from './views/child-tier2/GoalJar'
 import Rewards    from './views/child-tier2/Rewards'
@@ -97,7 +101,8 @@ export default function App() {
     <BrowserRouter>
       <FamilyProvider>
         <AuthProvider>
-          <Routes>
+          <InstallPrompt />
+        <Routes>
             <Route path="/" element={<PinAuth />} />
 
             {/* Parent routes */}
@@ -110,7 +115,9 @@ export default function App() {
               <Route path="economy"  element={<EconomicControls />} />
               <Route path="rewards"  element={<RewardManager />} />
               <Route path="tax-fund" element={<TaxFund />} />
-              <Route path="backup"   element={<ComingSoon label="Backup & Restore" />} />
+              <Route path="backup"   element={<Backup />} />
+              <Route path="members"  element={<Members />} />
+              <Route path="loans"    element={<Loans />} />
               <Route path="child/:memberId" element={<ComingSoon label="Child Detail" />} />
             </Route>
 
@@ -118,7 +125,8 @@ export default function App() {
             <Route path="/child" element={<Tier2Shell />}>
               <Route path="home"    element={<Tier2Home />} />
               <Route path="chores"  element={<Chores />} />
-              <Route path="payslip" element={<Payslip />} />
+              <Route path="ledger"  element={<Ledger />} />
+              <Route path="payslip" element={<Navigate to="/child/ledger" replace />} />
               <Route path="savings" element={<Savings />} />
               <Route path="goal"    element={<GoalJar />} />
               <Route path="rewards" element={<Rewards />} />

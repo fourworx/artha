@@ -1,11 +1,9 @@
 import { useState, useEffect } from 'react'
 import { Zap, Plus } from 'lucide-react'
-import { useFamily } from '../../context/FamilyContext'
+import { useFamily, useCurrency } from '../../context/FamilyContext'
 import { addUtilityCharge, getUtilityCharges } from '../../db/operations'
 import { useAuth } from '../../context/AuthContext'
 import { today, displayDate } from '../../utils/dates'
-import { formatRupees } from '../../utils/currency'
-
 const QUICK_REASONS = [
   'Left lights on',
   'Long shower',
@@ -17,6 +15,7 @@ const QUICK_REASONS = [
 export default function UtilityLogger() {
   const { children } = useFamily()
   const { currentMember } = useAuth()
+  const fmt = useCurrency()
 
   const [selectedChild, setSelectedChild] = useState(null)
   const [amount, setAmount]               = useState('')
@@ -130,7 +129,7 @@ export default function UtilityLogger() {
                   border: `1px solid ${amount === String(v) ? 'var(--accent-blue)' : 'var(--border)'}`,
                   color: amount === String(v) ? '#fff' : 'var(--text-muted)',
                 }}>
-                ₹{v}
+                {fmt(v)}
               </button>
             ))}
           </div>
@@ -172,7 +171,7 @@ export default function UtilityLogger() {
                     <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{displayDate(log.date)}</p>
                   </div>
                   <span className="text-sm font-mono font-semibold" style={{ color: 'var(--negative)' }}>
-                    −{formatRupees(log.amount)}
+                    −{fmt(log.amount)}
                   </span>
                 </div>
               )

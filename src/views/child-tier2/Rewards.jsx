@@ -2,12 +2,13 @@ import { useState, useEffect, useCallback } from 'react'
 import { useAuth } from '../../context/AuthContext'
 import { useFamily } from '../../context/FamilyContext'
 import { addRewardRequest, getRewardRequests } from '../../db/operations'
-import { formatRupees } from '../../utils/currency'
+import { useCurrency } from '../../context/FamilyContext'
 import { REWARD_CATEGORIES } from '../../utils/constants'
 import { ShoppingBag, X, Check } from 'lucide-react'
 
 // ── Confirm purchase sheet ────────────────────────────────────────────────────
 function BuySheet({ reward, spending, onConfirm, onClose }) {
+  const fmt = useCurrency()
   const canAfford = spending >= reward.price
 
   return (
@@ -29,7 +30,7 @@ function BuySheet({ reward, spending, onConfirm, onClose }) {
                 {reward.title}
               </p>
               <p className="text-sm font-mono" style={{ color: 'var(--positive)' }}>
-                {formatRupees(reward.price)}
+                {fmt(reward.price)}
               </p>
             </div>
           </div>
@@ -39,13 +40,13 @@ function BuySheet({ reward, spending, onConfirm, onClose }) {
             style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
             <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>YOUR WALLET</span>
             <span className="text-sm font-mono font-bold" style={{ color: canAfford ? 'var(--positive)' : 'var(--negative)' }}>
-              {formatRupees(spending)}
+              {fmt(spending)}
             </span>
           </div>
 
           {!canAfford && (
             <p className="text-xs font-mono text-center" style={{ color: 'var(--negative)' }}>
-              Need {formatRupees(reward.price - spending)} more to afford this
+              Need {fmt(reward.price - spending)} more to afford this
             </p>
           )}
 
@@ -79,6 +80,7 @@ function BuySheet({ reward, spending, onConfirm, onClose }) {
 
 // ── Reward card ───────────────────────────────────────────────────────────────
 function RewardCard({ reward, spending, requestStatus, onBuy }) {
+  const fmt = useCurrency()
   const canAfford = spending >= reward.price
   const isPending  = requestStatus === 'pending'
   const isApproved = requestStatus === 'approved'
@@ -103,7 +105,7 @@ function RewardCard({ reward, spending, requestStatus, onBuy }) {
         <span className="text-xs font-mono" style={{ color: 'var(--positive)' }}>✓ Approved</span>
       ) : (
         <span className="text-xs font-mono font-bold" style={{ color: canAfford ? 'var(--positive)' : 'var(--text-dim)' }}>
-          {formatRupees(reward.price)}
+          {fmt(reward.price)}
         </span>
       )}
     </button>
@@ -114,6 +116,7 @@ function RewardCard({ reward, spending, requestStatus, onBuy }) {
 export default function Rewards() {
   const { currentMember } = useAuth()
   const { rewards } = useFamily()
+  const fmt = useCurrency()
 
   const [requests, setRequests]   = useState([])
   const [buying, setBuying]       = useState(null)  // reward being confirmed
@@ -168,7 +171,7 @@ export default function Rewards() {
           </h2>
           <span className="text-sm font-mono font-bold" style={{ color: 'var(--positive)' }}>
             <ShoppingBag size={14} className="inline mr-1" />
-            {formatRupees(spending)}
+            {fmt(spending)}
           </span>
         </div>
       </div>

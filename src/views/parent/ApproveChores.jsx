@@ -3,13 +3,27 @@ import { Check, X, RefreshCw, Gift } from 'lucide-react'
 import { useFamily } from '../../context/FamilyContext'
 import {
   getPendingLogsForMembers, approveChoreLog, rejectChoreLog,
+  approveBonusChoreLog, approveTier1ChoreLog,
   getPendingRewardRequests, approveRewardRequest, rejectRewardRequest,
+  updateCreditScore,
 } from '../../db/operations'
 import { displayDate } from '../../utils/dates'
-import { formatRupees } from '../../utils/currency'
+import { useCurrency } from '../../context/FamilyContext'
+
+function weeklyFreq(chore) {
+  switch (chore.recurrence) {
+    case 'daily':   return 7
+    case 'weekday': return 5
+    case 'weekend': return 2
+    case 'weekly':  return 1
+    case 'custom':  return chore.daysPerWeek ?? 3
+    default:        return 0
+  }
+}
 
 export default function ApproveChores() {
-  const { children, chores } = useFamily()
+  const { children, chores, reload } = useFamily()
+  const fmt = useCurrency()
 
   const [logs,           setLogs]           = useState([])
   const [rewardRequests, setRewardRequests] = useState([])
@@ -38,15 +52,48 @@ export default function ApproveChores() {
   // Chore actions
   const approveChore = async (log) => {
     setActing(log.id)
-    await approveChoreLog(log.id)
-    setLogs(prev => prev.filter(l => l.id !== log.id))
-    setActing(null)
+    const chore  = choreMap[log.choreId]
+    const member = memberMap[log.memberId]
+    try {
+      if (member?.tier === 1) {
+        const tier1Chores = chores.filter(c =>
+          c.type === 'mandatory' && c.isActive && c.assignedTo.includes(member.id)
+        )
+        const totalWeeklyExpected = tier1Chores.reduce((s, c) => s + weeklyFreq(c), 0)
+        const coinAmount = totalWeeklyExpected > 0
+          ? Math.round((member.baseSalary ?? 0) / totalWeeklyExpected)
+          : 1
+        await approveTier1ChoreLog(log.id, log.memberId, coinAmount)
+        await reload()
+      } else if (chore?.type === 'bonus') {
+        await approveBonusChoreLog(log.id, log.memberId, log.choreId)
+        await reload()
+      } else {
+        await approveChoreLog(log.id)
+        if (chore?.type === 'mandatory') updateCreditScore(log.memberId, 2).catch(() => {})
+      }
+      setLogs(prev => prev.filter(l => l.id !== log.id))
+    } catch (e) {
+      console.error('[Artha] approveChore error:', e)
+      alert(`Approval failed: ${e.message}`)
+    } finally {
+      setActing(null)
+    }
   }
+
   const rejectChore = async (log) => {
     setActing(log.id)
-    await rejectChoreLog(log.id)
-    setLogs(prev => prev.filter(l => l.id !== log.id))
-    setActing(null)
+    const chore = choreMap[log.choreId]
+    try {
+      await rejectChoreLog(log.id)
+      if (chore?.type === 'mandatory') updateCreditScore(log.memberId, -5).catch(() => {})
+      setLogs(prev => prev.filter(l => l.id !== log.id))
+    } catch (e) {
+      console.error('[Artha] rejectChore error:', e)
+      alert(`Reject failed: ${e.message}`)
+    } finally {
+      setActing(null)
+    }
   }
 
   // Reward request actions
@@ -146,8 +193,8 @@ export default function ApproveChores() {
                           </span>
                           {chore?.type === 'bonus' && (
                             <span className="text-xs font-mono px-1.5 py-0.5 rounded"
-                              style={{ background: 'var(--bg-raised)', color: 'var(--positive)', border: '1px solid var(--border)' }}>
-                              +₹{chore.value}
+                              style={{ background: 'rgba(74,222,128,0.1)', color: 'var(--positive)', border: '1px solid rgba(74,222,128,0.25)' }}>
+                              ⚡ +{fmt(chore.value)} instant
                             </span>
                           )}
                         </div>
@@ -196,10 +243,10 @@ export default function ApproveChores() {
                         </p>
                         <div className="flex items-center gap-2 mt-0.5">
                           <span className="text-xs font-mono font-semibold" style={{ color: 'var(--warning)' }}>
-                            {formatRupees(req.amount)}
+                            {fmt(req.amount)}
                           </span>
                           <span className="text-xs font-mono" style={{ color: canAfford ? 'var(--text-muted)' : 'var(--negative)' }}>
-                            wallet: {formatRupees(wallet)}
+                            wallet: {fmt(wallet)}
                           </span>
                         </div>
                       </div>

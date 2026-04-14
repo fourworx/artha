@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { Landmark, ArrowUpRight } from 'lucide-react'
-import { useFamily } from '../../context/FamilyContext'
+import { useFamily, useCurrency } from '../../context/FamilyContext'
 import { updateTaxFund } from '../../db/operations'
-import { formatRupees, roundRupees } from '../../utils/currency'
+import { roundRupees } from '../../utils/currency'
 import { displayDateFull, today } from '../../utils/dates'
 import { FAMILY_ID } from '../../utils/constants'
 
@@ -16,6 +16,7 @@ const SPEND_REASONS = [
 
 export default function TaxFund() {
   const { family, reload } = useFamily()
+  const fmt = useCurrency()
 
   const [amount,       setAmount]       = useState('')
   const [reason,       setReason]       = useState('')
@@ -72,7 +73,7 @@ export default function TaxFund() {
           <Landmark size={28} style={{ color: 'var(--text-muted)' }} />
           <p className="text-xs font-mono mt-2" style={{ color: 'var(--text-muted)' }}>TOTAL BALANCE</p>
           <p className="text-4xl font-mono font-bold" style={{ color: 'var(--positive)' }}>
-            {formatRupees(balance)}
+            {fmt(balance)}
           </p>
           <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-dim)' }}>
             Collected from family taxes
@@ -108,7 +109,7 @@ export default function TaxFund() {
 
           <input type="number" min={1} max={balance}
             value={amount} onChange={e => setAmount(e.target.value)}
-            placeholder={`Amount (max ${formatRupees(balance)})`}
+            placeholder={`Amount (max ${fmt(balance)})`}
             className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
             style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
           />
@@ -125,7 +126,7 @@ export default function TaxFund() {
               color: (!amount || !effectiveReason || balance <= 0) ? 'var(--text-dim)' : 'var(--positive)',
             }}>
             <ArrowUpRight size={16} />
-            {saving ? 'Processing...' : `Spend ${amount ? formatRupees(Number(amount)) : '—'}`}
+            {saving ? 'Processing...' : `Spend ${amount ? fmt(Number(amount)) : '—'}`}
           </button>
         </div>
 
@@ -147,7 +148,7 @@ export default function TaxFund() {
                 </div>
                 <span className="text-sm font-mono font-semibold shrink-0"
                   style={{ color: entry.type === 'credit' ? 'var(--positive)' : 'var(--negative)' }}>
-                  {entry.type === 'credit' ? '+' : '−'}{formatRupees(entry.amount)}
+                  {entry.type === 'credit' ? '+' : '−'}{fmt(entry.amount)}
                 </span>
               </div>
             ))}

@@ -1,18 +1,18 @@
 import { useState, useEffect } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../../context/AuthContext'
-import { useFamily } from '../../context/FamilyContext'
+import { useFamily, useCurrency } from '../../context/FamilyContext'
 import { getPayslips } from '../../db/operations'
-import { formatRupees } from '../../utils/currency'
 import { shortDate } from '../../utils/dates'
 import { projectSavingsGrowth } from '../../engine/interest'
 
 const CustomTooltip = ({ active, payload }) => {
+  const fmt = useCurrency()
   if (!active || !payload?.length) return null
   return (
     <div className="px-2 py-1.5 rounded text-xs font-mono"
       style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
-      {formatRupees(payload[0].value)}
+      {fmt(payload[0].value)}
     </div>
   )
 }
@@ -20,6 +20,7 @@ const CustomTooltip = ({ active, payload }) => {
 export default function Savings() {
   const { currentMember, refreshMember } = useAuth()
   const { family } = useFamily()
+  const fmt = useCurrency()
   const [payslips, setPayslips] = useState([])
   const [loading, setLoading]   = useState(true)
 
@@ -55,7 +56,7 @@ export default function Savings() {
       <div className="px-4 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
         <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>MY SAVINGS</p>
         <p className="text-3xl font-mono font-bold mt-0.5" style={{ color: 'var(--accent-blue)' }}>
-          {formatRupees(savings)}
+          {fmt(savings)}
         </p>
         <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
           {Math.round(interestRate * 100)}% interest/week · auto-save {Math.round(autoSave * 100)}% of net pay
@@ -68,13 +69,13 @@ export default function Savings() {
           <div className="p-3 rounded-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>INTEREST EARNED (total)</p>
             <p className="text-lg font-mono font-bold mt-1" style={{ color: 'var(--positive)' }}>
-              {formatRupees(totalInterestEarned)}
+              {fmt(totalInterestEarned)}
             </p>
           </div>
           <div className="p-3 rounded-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>LAST WEEK INTEREST</p>
             <p className="text-lg font-mono font-bold mt-1" style={{ color: 'var(--positive)' }}>
-              {formatRupees(lastPayslip?.interestEarned ?? 0)}
+              {fmt(lastPayslip?.interestEarned ?? 0)}
             </p>
           </div>
         </div>
@@ -121,7 +122,7 @@ export default function Savings() {
               </AreaChart>
             </ResponsiveContainer>
             <p className="text-xs font-mono mt-1 text-center" style={{ color: 'var(--text-dim)' }}>
-              Projected: {formatRupees(projectionData[projectionData.length - 1]?.balance ?? savings)} in 8 weeks
+              Projected: {fmt(projectionData[projectionData.length - 1]?.balance ?? savings)} in 8 weeks
             </p>
           </div>
         </div>
