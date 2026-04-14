@@ -22,6 +22,7 @@ import More             from './views/parent/More'
 import Backup           from './views/parent/Backup'
 import Members          from './views/parent/Members'
 import Loans            from './views/parent/Loans'
+import ChildDetail      from './views/parent/ChildDetail'
 
 // Child Tier 2 views
 import Tier2Home  from './views/child-tier2/Home'
@@ -118,7 +119,7 @@ export default function App() {
               <Route path="backup"   element={<Backup />} />
               <Route path="members"  element={<Members />} />
               <Route path="loans"    element={<Loans />} />
-              <Route path="child/:memberId" element={<ComingSoon label="Child Detail" />} />
+              <Route path="child/:memberId" element={<ChildDetail />} />
             </Route>
 
             {/* Tier 2+ child routes */}

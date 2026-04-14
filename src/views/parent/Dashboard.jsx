@@ -661,7 +661,8 @@ export default function ParentDashboard() {
           const loanOutstanding = child.accounts?.loan?.outstanding ?? 0
           return (
             <div key={child.id} className="p-4 rounded-xl"
-              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', cursor: 'pointer' }}
+              onClick={() => navigate(`/parent/child/${child.id}`)}>
               {/* Name row */}
               <div className="flex items-center gap-3 mb-2">
                 <span className="text-3xl">{child.avatar}</span>
@@ -690,7 +691,7 @@ export default function ParentDashboard() {
 
               {/* Actions row */}
               {child.tier >= 2 && (
-                <div className="flex items-center gap-2 mb-3">
+                <div className="flex items-center gap-2 mb-3" onClick={e => e.stopPropagation()}>
                   <RunPayslipButton child={child} periodEnd={periodEnd} onDone={reload} />
                   <button
                     onClick={() => setViewPayslipFor(child)}
