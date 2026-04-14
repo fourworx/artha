@@ -1,12 +1,12 @@
 import { NavLink, useNavigate } from 'react-router-dom'
-import { Home, CheckSquare, FileText, Clock, LogOut } from 'lucide-react'
+import { Home, CheckSquare, FileText, Heart, LogOut } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 const items = [
-  { to: '/child/home',    label: 'Home',    Icon: Home,        end: true },
-  { to: '/child/chores',  label: 'Chores',  Icon: CheckSquare },
-  { to: '/child/ledger',  label: 'Ledger',  Icon: FileText },
-  { to: '/child/history', label: 'History', Icon: Clock },
+  { to: '/child/home',   label: 'Home',    Icon: Home,        end: true },
+  { to: '/child/chores', label: 'Chores',  Icon: CheckSquare },
+  { to: '/child/ledger', label: 'Ledger',  Icon: FileText },
+  { to: '/child/goal',   label: 'Goals',   Icon: Heart },
 ]
 
 export default function ChildNav() {

@@ -68,6 +68,7 @@ export default function EconomicControls() {
   const [interestRate,     setInterestRate]     = useState(0.02)
   const [loanInterestRate, setLoanInterestRate] = useState(0.05)
   const [autoSave,         setAutoSave]         = useState(0.20)
+  const [philanthropyPct,  setPhilanthropyPct]  = useState(0.03)
 
   const [saving, setSaving] = useState(false)
   const [saved,  setSaved]  = useState(false)
@@ -107,6 +108,7 @@ export default function EconomicControls() {
     setInterestRate(cfg.interestRate ?? 0.02)
     setLoanInterestRate(cfg.loanInterestRate ?? 0.05)
     setAutoSave(cfg.autoSavePercent ?? 0.20)
+    setPhilanthropyPct(cfg.philanthropyPercent ?? 0.03)
   }
 
   // When selected child changes in per-child mode, reload their sliders
@@ -149,6 +151,7 @@ export default function EconomicControls() {
       interestRate,
       loanInterestRate: Math.max(loanInterestRate, interestRate),
       autoSavePercent: autoSave,
+      philanthropyPercent: philanthropyPct,
     }
     const familyWideFields = {
       currency,
@@ -418,6 +421,11 @@ export default function EconomicControls() {
                 value={autoSave} min={0} max={0.50} step={0.05}
                 display={pct} onChange={setAutoSave}
               />
+
+              <SliderRow label="PHILANTHROPY %"
+                value={philanthropyPct} min={0} max={0.20} step={0.01}
+                display={pct} onChange={setPhilanthropyPct}
+              />
             </div>
           )}
         </div>
@@ -430,11 +438,12 @@ export default function EconomicControls() {
               EXAMPLE: {curr.symbol}200 GROSS{!sameForAll && selectedChild ? ` · ${selectedChild.name}` : ''}
             </p>
             {[
-              ['Tax',        `−${curr.symbol}${tax}`],
-              ['Rent',       `−${curr.symbol}${rentAmount}`],
-              ['Net',        `${curr.symbol}${net}`],
-              ['→ Savings',  `${curr.symbol}${Math.round(net * autoSave)}`],
-              ['→ Spending', `${curr.symbol}${Math.round(net * (1 - autoSave))}`],
+              ['Tax',             `−${curr.symbol}${tax}`],
+              ['Rent',            `−${curr.symbol}${rentAmount}`],
+              ['Net',             `${curr.symbol}${net}`],
+              ['→ Savings',       `${curr.symbol}${Math.round(net * autoSave)}`],
+              ['→ Philanthropy',  `${curr.symbol}${Math.round(net * philanthropyPct)}`],
+              ['→ Spending',      `${curr.symbol}${Math.round(net * (1 - autoSave - philanthropyPct))}`],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between">
                 <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{k}</span>

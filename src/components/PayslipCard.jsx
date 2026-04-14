@@ -187,9 +187,15 @@ export default function PayslipCard({ payslip, member, familyName }) {
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <SectionLabel>ALLOCATIONS</SectionLabel>
         <Row label={`→ Savings (${Math.round((allocations.savings / (net || 1)) * 100)}%)`} value={fmt(allocations.savings)} positive={allocations.savings > 0} />
+        {allocations.philanthropy > 0 && (
+          <Row label={`→ Philanthropy (${Math.round((allocations.philanthropy / (net || 1)) * 100)}%)`} value={fmt(allocations.philanthropy)} positive />
+        )}
         <Row label="→ Spending Wallet" value={fmt(allocations.spending)} positive={allocations.spending > 0} />
         {interestEarned > 0 && (
           <Row label="+ Interest on savings" value={fmt(interestEarned)} positive />
+        )}
+        {payslip.philanthropyInterestEarned > 0 && (
+          <Row label="+ Interest on philanthropy" value={fmt(payslip.philanthropyInterestEarned)} positive />
         )}
       </div>
 

@@ -180,9 +180,9 @@ export default function ChildDetail() {
         {child.tier >= 2 && (
           <div className="grid grid-cols-3 gap-2">
             {[
-              { label: 'SPENDING', value: accounts.spending ?? 0,          color: 'var(--positive)' },
-              { label: 'SAVINGS',  value: accounts.savings  ?? 0,          color: 'var(--accent-blue)' },
-              { label: 'GOAL JAR', value: accounts.goalJar?.balance ?? 0, color: 'var(--warning)' },
+              { label: 'SPENDING',     value: accounts.spending     ?? 0, color: 'var(--positive)' },
+              { label: 'SAVINGS',      value: accounts.savings      ?? 0, color: 'var(--accent-blue)' },
+              { label: 'PHILANTHROPY', value: accounts.philanthropy ?? 0, color: 'var(--positive)' },
             ].map(({ label, value, color }) => (
               <div key={label} className="p-3 rounded-xl text-center"
                 style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>

@@ -99,8 +99,9 @@ export function calculatePayslip({
   const net = Math.max(0, gross - totalDeductions)
 
   // ── 6. Allocations ──────────────────────────────────────────────
-  const savingsAlloc = roundRupees(net * config.autoSavePercent)
-  const spending     = net - savingsAlloc
+  const savingsAlloc       = roundRupees(net * config.autoSavePercent)
+  const philanthropyAlloc  = roundRupees(net * (config.philanthropyPercent ?? 0))
+  const spending           = net - savingsAlloc - philanthropyAlloc
 
   // ── 7. Loan: interest compounds first, then repayment deducts ────
   const loanOutstanding = member.accounts.loan?.outstanding    ?? 0
@@ -123,12 +124,22 @@ export function calculatePayslip({
   const spendingAfterLoan  = spending - loanRepayment
   const newLoanOutstanding = Math.max(0, outstandingWithInterest - loanRepayment)
 
-  // ── 8. Interest on existing savings ─────────────────────────────
-  const interestEarned = calculateWeeklyInterest(member.accounts.savings, config.interestRate)
+  // ── 8. Interest on existing savings, philanthropy, and sub-goals ─
+  const interestEarned          = calculateWeeklyInterest(member.accounts.savings, config.interestRate)
+  const philanthropyBalance     = member.accounts.philanthropy ?? 0
+  const philanthropyInterest    = calculateWeeklyInterest(philanthropyBalance, config.interestRate)
+
+  // Sub-goals: each earns the same interest rate
+  const subGoals      = member.accounts.subGoals ?? []
+  const subGoalsAfter = subGoals.map(sg => ({
+    ...sg,
+    balance: roundRupees(sg.balance + calculateWeeklyInterest(sg.balance, config.interestRate)),
+  }))
 
   // ── 9. New balances ──────────────────────────────────────────────
-  const newSavings  = member.accounts.savings + savingsAlloc + interestEarned
-  const newSpending = member.accounts.spending + spendingAfterLoan
+  const newSavings      = member.accounts.savings + savingsAlloc + interestEarned
+  const newSpending     = member.accounts.spending + spendingAfterLoan
+  const newPhilanthropy = philanthropyBalance + philanthropyAlloc + philanthropyInterest
 
   return {
     earnings: {
@@ -152,16 +163,18 @@ export function calculatePayslip({
     totalDeductions,
     net,
     allocations: {
-      savings: savingsAlloc,
-      goalJar: 0,
-      spending: spendingAfterLoan,
+      savings:      savingsAlloc,
+      philanthropy: philanthropyAlloc,
+      spending:     spendingAfterLoan,
     },
     interestEarned,
+    philanthropyInterestEarned: philanthropyInterest,
     loanOutstandingAfter: newLoanOutstanding,
     balancesAfter: {
-      spending: newSpending,
-      savings: newSavings,
-      goalJar: member.accounts.goalJar?.balance ?? 0,
+      spending:     newSpending,
+      savings:      newSavings,
+      philanthropy: newPhilanthropy,
+      subGoals:     subGoalsAfter,
       // Null when fully paid off so the loan chip disappears from UI
       loan: newLoanOutstanding > 0
         ? { outstanding: newLoanOutstanding, weeklyRepayment: loanWeeklyRepay, interestFree: loanInterestFree }
@@ -265,10 +278,11 @@ export async function settlePayslip(payslipId) {
   // ── Update member accounts ───────────────────────────────────────
   await updateMemberAccounts(ps.memberId, {
     ...member.accounts,
-    spending: ps.balancesAfter.spending,
-    savings:  ps.balancesAfter.savings,
-    goalJar:  member.accounts.goalJar,
-    loan:     ps.balancesAfter.loan,
+    spending:     ps.balancesAfter.spending,
+    savings:      ps.balancesAfter.savings,
+    philanthropy: ps.balancesAfter.philanthropy ?? (member.accounts.philanthropy ?? 0),
+    subGoals:     ps.balancesAfter.subGoals     ?? (member.accounts.subGoals     ?? []),
+    loan:         ps.balancesAfter.loan,
   })
 
   // ── Update tax fund ──────────────────────────────────────────────
@@ -320,6 +334,11 @@ export async function settlePayslip(payslipId) {
       type: 'interest',
       amount: ps.interestEarned,
       description: `Savings interest (${Math.round(family.config.interestRate * 100)}%/wk)`,
+    },
+    (ps.allocations?.philanthropy > 0 || ps.philanthropyInterestEarned > 0) && {
+      type: 'deposit',
+      amount: (ps.allocations?.philanthropy ?? 0) + (ps.philanthropyInterestEarned ?? 0),
+      description: `Philanthropy${ps.philanthropyInterestEarned > 0 ? ` + interest` : ''}`,
     },
     ps.deductions.loanInterest > 0 && {
       type: 'loan_interest',

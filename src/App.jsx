@@ -131,7 +131,7 @@ export default function App() {
               <Route path="savings" element={<Savings />} />
               <Route path="goal"    element={<GoalJar />} />
               <Route path="rewards" element={<Rewards />} />
-              <Route path="history" element={<History />} />
+              <Route path="history" element={<Navigate to="/child/ledger" replace />} />
             </Route>
 
             {/* Tier 1 */}

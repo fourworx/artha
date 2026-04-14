@@ -4,6 +4,7 @@ export const DEFAULT_CONFIG = {
   interestRate: 0.02,       // savings interest per pay period
   loanInterestRate: 0.05,   // loan interest per pay period — must always be >= interestRate
   autoSavePercent: 0.20,
+  philanthropyPercent: 0.03,
   payPeriod: 'weekly',      // 'weekly' | 'monthly'
   paydayDow: 6,             // weekly payday: 0=Sun 1=Mon … 6=Sat (default Saturday)
   paydayDom: 28,            // monthly payday: 1–28 (clamped to last day of month)

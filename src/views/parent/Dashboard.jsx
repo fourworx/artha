@@ -734,9 +734,9 @@ export default function ParentDashboard() {
               {child.tier >= 2 && (
                 <div className="grid grid-cols-3 gap-2 mt-3">
                   {[
-                    { label: 'SPENDING', value: child.accounts?.spending ?? 0,           color: 'var(--positive)' },
-                    { label: 'SAVINGS',  value: child.accounts?.savings  ?? 0,           color: 'var(--accent-blue)' },
-                    { label: 'GOAL JAR', value: child.accounts?.goalJar?.balance ?? 0,  color: 'var(--warning)' },
+                    { label: 'SPENDING',     value: child.accounts?.spending     ?? 0, color: 'var(--positive)' },
+                    { label: 'SAVINGS',      value: child.accounts?.savings      ?? 0, color: 'var(--accent-blue)' },
+                    { label: 'PHILANTHROPY', value: child.accounts?.philanthropy ?? 0, color: 'var(--positive)' },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="p-2 rounded-lg text-center" style={{ background: 'var(--bg-raised)' }}>
                       <p className="text-xs font-mono" style={{ color: 'var(--text-muted)', fontSize: '9px' }}>{label}</p>

@@ -223,11 +223,8 @@ export default function Tier2Home() {
   useEffect(() => { loadProjected() }, [loadProjected])
 
   const accounts        = currentMember?.accounts ?? {}
-  const goalJar         = accounts.goalJar
+  const philanthropy    = accounts.philanthropy ?? 0
   const loanOutstanding = accounts.loan?.outstanding ?? 0
-  const goalProgress = goalJar?.target > 0
-    ? Math.min(goalJar.balance / goalJar.target, 1)
-    : 0
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -294,20 +291,13 @@ export default function Tier2Home() {
           <button onClick={() => navigate('/child/goal')}
             className="p-4 rounded-xl text-left transition-all active:scale-95"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>GOAL JAR</p>
-            <p className="text-2xl font-mono font-bold mt-1" style={{ color: 'var(--warning)' }}>
-              {fmt(goalJar?.balance ?? 0)}
+            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>PHILANTHROPY</p>
+            <p className="text-2xl font-mono font-bold mt-1" style={{ color: 'var(--positive)' }}>
+              {fmt(philanthropy)}
             </p>
-            {goalJar && (
-              <>
-                <div className="mt-2 h-1 rounded-full overflow-hidden" style={{ background: 'var(--bg-raised)' }}>
-                  <div className="h-full rounded-full" style={{ width: `${goalProgress * 100}%`, background: 'var(--warning)' }} />
-                </div>
-                <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
-                  {Math.round(goalProgress * 100)}% of {fmt(goalJar.target)}
-                </p>
-              </>
-            )}
+            <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
+              {Math.round(((currentMember?.config?.interestRate ?? family?.config?.interestRate) ?? 0.02) * 100)}%/{periodLabel} interest
+            </p>
           </button>
         </div>
 

@@ -1,0 +1,191 @@
+{\rtf1\ansi\ansicpg1252\cocoartf2868
+\cocoatextscaling0\cocoaplatform0{\fonttbl\f0\fswiss\fcharset0 Helvetica;\f1\fnil\fcharset0 Menlo-Bold;\f2\fnil\fcharset0 Menlo-Regular;
+\f3\fnil\fcharset0 Menlo-Italic;}
+{\colortbl;\red255\green255\blue255;\red237\green237\blue237;\red25\green29\blue39;\red224\green224\blue224;
+\red162\green168\blue247;}
+{\*\expandedcolortbl;;\csgenericrgb\c92857\c92857\c92857;\csgenericrgb\c9839\c11388\c15260\c95000;\csgenericrgb\c87761\c87761\c87761;
+\cssrgb\c69412\c72549\c97647;}
+\paperw11900\paperh16840\margl1440\margr1440\vieww11520\viewh8400\viewkind0
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+
+\f0\fs24 \cf0 \
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f1\b \cf2 \cb3 \CocoaLigature0 1.
+\f2\b0 \cf4  
+\f1\b \cf2 Settle
+\f2\b0 \cf4  
+\f1\b \cf2 /
+\f2\b0 \cf4  
+\f1\b \cf2 Approve
+\f2\b0 \cf4  
+\f1\b \cf2 Payslip
+\f2\b0 \cf4  
+\f3\i (urgent
+\f2\i0  
+\f3\i \'97
+\f2\i0  
+\f3\i before
+\f2\i0  
+\f3\i April
+\f2\i0  
+\f3\i 18)
+\f2\i0 \
+  - Decision made: Option A \'97 \cf5 status:\cf4  \cf5 draft\cf4  \cf5 |\cf4  \cf5 settled\cf4  on payslip\
+  - Run = calculates + saves payslip document only, NO balance/tax fund updates\
+  - Settle = parent taps "Settle" \uc0\u8594  balances update, transactions log, tax fund updates\
+  - Child can see draft payslip immediately ("pending settlement")\
+  - Need to decide: does child also confirm receipt, or is it parent-only action? - Parent Only\
+Place the button for Pay Slip below child name in second line, it is too crowded to have the child name and credit score and these in the same line.\
+\
+  
+\f1\b \cf2 2.
+\f2\b0 \cf4  
+\f1\b \cf2 Transaction
+\f2\b0 \cf4  
+\f1\b \cf2 History
+\f2\b0 \cf4  
+\f1\b \cf2 /
+\f2\b0 \cf4  
+\f1\b \cf2 Ledger
+\f2\b0 \cf4  
+\f1\b \cf2 View
+\f2\b0 \cf4  
+\f3\i (for
+\f2\i0  
+\f3\i both
+\f2\i0  
+\f3\i parent
+\f2\i0  
+\f3\i and
+\f2\i0  
+\f3\i child)
+\f2\i0 \
+  - Display format decided: grouped by payslip period (not flat feed)\
+  - Each period shows: payslip summary + individual line items (bonus chores by name, rent, interest, loan repayments)\
+  - Child access: extend existing Payslip tab (archive rows show transactions when expanded)\
+  - Parent access: tap child card \uc0\u8594  child detail page (all periods + summary strip showing totals by category e.g. total\
+  rent paid, total bonus earned)\
+  - Settle button lives here \'97 draft payslips show yellow "Settle" inline, settled show green \uc0\u10003 \
+\
+  
+\f1\b \cf2 3.
+\f2\b0 \cf4  
+\f1\b \cf2 Chore
+\f2\b0 \cf4  
+\f1\b \cf2 Completion
+\f2\b0 \cf4  
+\f1\b \cf2 %
+\f2\b0 \cf4  
+\f1\b \cf2 on
+\f2\b0 \cf4  
+\f1\b \cf2 Payslip
+\f2\b0 \cf4 \
+  - Confirmed: based on full period, not just today\
+  - Known issue: running payslip mid-period (like today Apr 13 for period ending Apr 18) locks in incomplete chore data \'97\
+  the remaining days never count. This needs to be fixed.\
+  - Long-term: draft payslips should ideally be re-calculable until settled, or at minimum warn parent if run before period\
+  ends\
+\
+  
+\f1\b \cf2 4.
+\f2\b0 \cf4  
+\f1\b \cf2 Build
+\f2\b0 \cf4  
+\f1\b \cf2 order
+\f2\b0 \cf4  
+\f1\b \cf2 (agreed):
+\f2\b0 \cf4 \
+  1. Settle feature\
+  2. Child transaction history (extend Payslip tab)\
+  3. Parent child detail page
+\f0 \cf0 \cb1 \CocoaLigature1 \
+\pard\tx720\tx1440\tx2160\tx2880\tx3600\tx4320\tx5040\tx5760\tx6480\tx7200\tx7920\tx8640\pardirnatural\partightenfactor0
+\cf0 \
+\
+Parents Home: \
+\
+Under each child card, apart from daily progress bar showing mandatory task completion, should also have weekly/monthly (payslip period selected) progress bar which covers all mandatory tasks as some maybe once a month once a week also and not just daily. This will show total progress completed bar. So if 65 total mandatory tasks in a week and weekly payslip period has been selected then that progress bar should be visible. Similarly for monthly.\
+\
+Under tier 2 child, remove goal ? As it's same as savings? Or instead have an option to save for a separate goal based account, like Bicycle account.\
+\
+What I want to see as a parent for a child: \
+\
+Payslips approved and ending with period dates below it. Also these payslips should have IDs/names so can communicated with child which payslip we discussing.\
+\
+Have an option to have Simple or Advanced Economic Controls. Where in simple, just rent and tax and savings is collected, with the option to make anyone 0 if someone doesn\'92t want them. In Advanced, all the features including: \
+Inflation meter. Increase rent and screen time, utilities etc... \
+Also charge for utilities along with rent\
+\
+Instead of goal have Philanthropy account, as I feel goal is same as savings unless we have an option to have a separate account for certain goal, like bicycle account. Comment on this.\
+\
+Data analysis : \
+\
+Line chart tracking credit history \
+Net worth tracker for child : tracks savings, interest from savings minus expenses plus any other accounts holding money \
+\
+Thermometer stlye graph showing family tax fund progress to goal\
+\
+Visualizations : \
+Children (and adults!) process visual data much better than rows of numbers. Focus on these three charts for their dashboard:\
+The "Where Does My Money Go?" Pie Chart: A breakdown of their gross income. It should clearly show slices for Rent, Taxes, Savings, Debt Repayment, and Discretionary Spending. This visually reinforces how much of their paycheck is actually theirs to spend.\
+The Net Worth Line Graph: A line moving up and to the right over time. This includes their cash plus their savings, minus their loans. If they take out a big loan, they will see this line drop, which is a powerful visual lesson.\
+The Credit Score Gauge: A colour-coded gauge (Red, Yellow, Green) that shows their current standing. Use Credit Report Card instead of Credit Score as report card is more child focused. \
+\
+A graph to show the magic of compounding on their savings\
+\
+\'97\'97\'97\'97\'97\
+\
+Answers to claude:\
+\
+\pard\tx560\tx1120\tx1680\tx2240\tx2800\tx3360\tx3920\tx4480\tx5040\tx5600\tx6160\tx6720\pardirnatural\partightenfactor0
+
+\f2 \cf4 \cb3 \CocoaLigature0 My take: Philanthropy as a fixed third account is a stronger concept than a generic goal jar. Sub-goal accounts (like     \
+  Bicycle Fund) are useful but can come later as Phase 2. What's your instinct? \
+\
+Philanthropy fixed, but have option to make it 0% in settings. Have options for custom sub-goal accounts, remove current goal jar. Need to figure out where to put these sub-goal accounts, can\'92t put it on card can we?
+\f0 \cf0 \cb1 \CocoaLigature1 \
+\
+\
+5. Make sure to add utilities cost too. It needs to be selected as an amount by the parent like rent. \
+\
+6. Visualisation are a must for children, today even ins schools they are taught how to read data via charts. Here is my take:\
+\
+
+\f3\i \cf4 \cb3 \CocoaLigature0 Straightforward (data already exists):
+\f2\i0                                                                                     \
+  - Credit score history line chart (credit score is updated every payslip)                                                 \
+  - Net worth tracker (savings + spending \uc0\u8722  loan = already calculable)                                                      \
+  - Family tax fund thermometer toward a goal      \
+\
+Implement  this. But where will you put this?                                                                         \
+                                                                                                                            \
+  
+\f3\i Medium effort:
+\f2\i0                                                                                                             \
+  - "Where does my money go?" pie chart (transactions already typed by category)                                - OK            \
+  - Compounding magic graph (can be a projection, not just history)     - Are we talking about projecting or showing on how there savings has increased because of compounding? \
+\
+                                                     \
+                                                            \
+  
+\f3\i Heavier:
+\f2\i0                                                                                                                   \
+  - Credit Report Card gauge (replaces credit score chip \'97 good reframe for kids) - what are you proposing? \
+  - Net worth line over time (needs historical balance snapshots \'97 not currently stored, only current balances) - I think is a good idea as it is important for kids to see how their past efforts are giving them fruits now\'85. \
+\
+We can do  all the visualisation together in the next phase after settle, ledger, parent detail page etc\'85 are completed.\
+\
+Comment 
+\f0 \cf0 \cb1 \CocoaLigature1 \
+\
+\'97\'97\'97\'97\'97\'97\'97\'97\
+\
+Sub-goals: You mean this will go - after clicking goal jar card in child account?\
+Yes to interest on goal accounts. As in real life, would be earning interest, plus a child should be tempted to not use his money and instead use it for earning interest. \
+\
+Yes two separate things for utilities, ad hoc for penalties, and fixed per payslip like rent too.\
+\
+No need to change the current credit chip on child card, as it  looks fine. Just change the name as we agreed.\
+\
+Before we begin build, finalise all the changes, build order, show me in brief and also update handoff so we dont lose it}
