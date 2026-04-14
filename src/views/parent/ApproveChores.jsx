@@ -1,11 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Check, X, RefreshCw, Gift } from 'lucide-react'
+import { Check, X, RefreshCw, Gift, Heart, Target } from 'lucide-react'
 import { useFamily } from '../../context/FamilyContext'
 import {
   getPendingLogsForMembers, approveChoreLog, rejectChoreLog,
   approveBonusChoreLog, approveTier1ChoreLog,
   getPendingRewardRequests, approveRewardRequest, rejectRewardRequest,
   updateCreditScore,
+  getPendingMemberRequests, approveDonation, approveSubGoalWithdrawal, resolveMemberRequest,
 } from '../../db/operations'
 import { displayDate } from '../../utils/dates'
 import { useCurrency } from '../../context/FamilyContext'
@@ -25,10 +26,11 @@ export default function ApproveChores() {
   const { children, chores, reload } = useFamily()
   const fmt = useCurrency()
 
-  const [logs,           setLogs]           = useState([])
-  const [rewardRequests, setRewardRequests] = useState([])
-  const [loading,        setLoading]        = useState(true)
-  const [acting,         setActing]         = useState(null)
+  const [logs,            setLogs]            = useState([])
+  const [rewardRequests,  setRewardRequests]  = useState([])
+  const [memberRequests,  setMemberRequests]  = useState([])
+  const [loading,         setLoading]         = useState(true)
+  const [acting,          setActing]          = useState(null)
 
   const choreMap  = Object.fromEntries(chores.map(c => [c.id, c]))
   const memberMap = Object.fromEntries(children.map(m => [m.id, m]))
@@ -36,14 +38,17 @@ export default function ApproveChores() {
   const loadAll = useCallback(async () => {
     setLoading(true)
     const ids = children.map(c => c.id)
-    const [pending, rewards] = await Promise.all([
+    const [pending, rewards, memberReqs] = await Promise.all([
       getPendingLogsForMembers(ids),
       getPendingRewardRequests(ids),
+      getPendingMemberRequests(ids),
     ])
     pending.sort((a, b) => b.completedAt - a.completedAt)
     rewards.sort((a, b) => b.requestedAt - a.requestedAt)
+    memberReqs.sort((a, b) => b.requestedAt - a.requestedAt)
     setLogs(pending)
     setRewardRequests(rewards)
+    setMemberRequests(memberReqs)
     setLoading(false)
   }, [children])
 
@@ -122,6 +127,32 @@ export default function ApproveChores() {
     return acc
   }, [])
 
+  // Member request actions (donation / sub-goal withdrawal)
+  const approveMemberReq = async (req) => {
+    setActing(req.id)
+    const member = memberMap[req.memberId]
+    try {
+      if (req.type === 'donation') {
+        await approveDonation(req.id, req.memberId, req.amount, req.description)
+      } else if (req.type === 'subgoal_withdrawal') {
+        await approveSubGoalWithdrawal(req.id, req.memberId, req.amount, req.metadata ?? {})
+      }
+      setMemberRequests(prev => prev.filter(r => r.id !== req.id))
+      await reload()
+    } catch (e) {
+      alert(e.message)
+    } finally {
+      setActing(null)
+    }
+  }
+
+  const denyMemberReq = async (req) => {
+    setActing(req.id)
+    await resolveMemberRequest(req.id, 'denied')
+    setMemberRequests(prev => prev.filter(r => r.id !== req.id))
+    setActing(null)
+  }
+
   // Group reward requests by member
   const groupedRewards = children.reduce((acc, child) => {
     const childReqs = rewardRequests.filter(r => r.memberId === child.id)
@@ -129,7 +160,14 @@ export default function ApproveChores() {
     return acc
   }, [])
 
-  const totalPending = logs.length + rewardRequests.length
+  // Group member requests by member
+  const groupedMemberRequests = children.reduce((acc, child) => {
+    const childReqs = memberRequests.filter(r => r.memberId === child.id)
+    if (childReqs.length > 0) acc.push({ member: child, requests: childReqs })
+    return acc
+  }, [])
+
+  const totalPending = logs.length + rewardRequests.length + memberRequests.length
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -256,6 +294,81 @@ export default function ApproveChores() {
                         <X size={16} />
                       </button>
                       <button disabled={isActing || !canAfford} onClick={() => approveReward(req)}
+                        className="p-2 rounded-lg active:scale-95"
+                        style={{
+                          background: canAfford ? 'rgba(74,222,128,0.15)' : 'var(--bg-raised)',
+                          color: canAfford ? 'var(--positive)' : 'var(--text-dim)',
+                        }}>
+                        <Check size={16} />
+                      </button>
+                    </div>
+                  )
+                })}
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* ── Donation & sub-goal withdrawal requests ── */}
+        {groupedMemberRequests.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs font-mono px-1" style={{ color: 'var(--text-muted)' }}>PHILANTHROPY REQUESTS</p>
+            {groupedMemberRequests.map(({ member, requests }) => (
+              <div key={member.id} className="flex flex-col gap-2">
+                <div className="flex items-center gap-2 px-1">
+                  <span className="text-xl">{member.avatar}</span>
+                  <span className="text-xs font-mono font-semibold" style={{ color: 'var(--text-muted)' }}>
+                    {member.name.toUpperCase()} — {requests.length} request{requests.length > 1 ? 's' : ''}
+                  </span>
+                </div>
+                {requests.map(req => {
+                  const isActing   = acting === req.id
+                  const isDonation = req.type === 'donation'
+                  const meta       = req.metadata ?? {}
+
+                  // Balance check
+                  const balance = isDonation
+                    ? (member.accounts?.philanthropy ?? 0)
+                    : (() => {
+                        const sg = (member.accounts?.subGoals ?? []).find(s => s.id === meta.subGoalId)
+                        return sg?.balance ?? 0
+                      })()
+                  const canAfford = balance >= req.amount
+
+                  // Label lines
+                  const title = isDonation
+                    ? `Donate to ${req.description || 'charity'}`
+                    : `Withdraw from "${meta.subGoalName ?? 'goal'}"`
+                  const subtitle = isDonation
+                    ? `philanthropy: ${fmt(balance)}`
+                    : `→ ${meta.destination ?? 'spending'} · goal bal: ${fmt(balance)}${meta.deleteGoal ? ' · delete goal' : ''}`
+
+                  return (
+                    <div key={req.id} className="flex items-center gap-3 p-3 rounded-xl"
+                      style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', opacity: isActing ? 0.5 : 1 }}>
+                      {isDonation
+                        ? <Heart size={18} style={{ color: 'var(--positive)', flexShrink: 0 }} />
+                        : <Target size={18} style={{ color: 'var(--accent-blue)', flexShrink: 0 }} />
+                      }
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-mono truncate" style={{ color: 'var(--text-primary)' }}>
+                          {title}
+                        </p>
+                        <div className="flex items-center gap-2 mt-0.5 flex-wrap">
+                          <span className="text-xs font-mono font-semibold" style={{ color: isDonation ? 'var(--positive)' : 'var(--accent-blue)' }}>
+                            {fmt(req.amount)}
+                          </span>
+                          <span className="text-xs font-mono" style={{ color: canAfford ? 'var(--text-muted)' : 'var(--negative)', fontSize: 10 }}>
+                            {subtitle}
+                          </span>
+                        </div>
+                      </div>
+                      <button disabled={isActing} onClick={() => denyMemberReq(req)}
+                        className="p-2 rounded-lg active:scale-95"
+                        style={{ background: 'rgba(248,113,113,0.15)', color: 'var(--negative)' }}>
+                        <X size={16} />
+                      </button>
+                      <button disabled={isActing || !canAfford} onClick={() => approveMemberReq(req)}
                         className="p-2 rounded-lg active:scale-95"
                         style={{
                           background: canAfford ? 'rgba(74,222,128,0.15)' : 'var(--bg-raised)',

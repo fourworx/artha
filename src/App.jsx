@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { useState, useEffect } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { FamilyProvider, useFamily } from './context/FamilyContext'
-import { getPendingLogsForMembers } from './db/operations'
+import { getPendingLogsForMembers, getPendingMemberRequests } from './db/operations'
 import ParentNav from './components/ParentNav'
 import ChildNav from './components/ChildNav'
 import InstallPrompt from './components/InstallPrompt'
@@ -56,7 +56,10 @@ function ParentShell() {
   useEffect(() => {
     if (!children.length) return
     const ids = children.map(c => c.id)
-    getPendingLogsForMembers(ids).then(logs => setPendingCount(logs.length))
+    Promise.all([
+      getPendingLogsForMembers(ids),
+      getPendingMemberRequests(ids),
+    ]).then(([logs, memberReqs]) => setPendingCount(logs.length + memberReqs.length))
   }, [children])
 
   if (!currentMember || currentMember.role !== 'parent') return <Navigate to="/" replace />
