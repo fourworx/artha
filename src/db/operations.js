@@ -86,13 +86,14 @@ function mapPayslip(row) {
     gross:               row.gross,
     net:                 row.net,
     allocations:         row.allocations,
-    interestEarned:      row.interest_earned,
-    loanOutstandingAfter: row.loan_outstanding_after,
-    balancesAfter:       row.balances_after,
-    creditScore:         row.credit_score,
-    createdAt:           row.created_at,
-    totalDeductions:     row.total_deductions,
-    status:              row.status ?? 'settled',
+    interestEarned:              row.interest_earned,
+    philanthropyInterestEarned:  row.allocations?.philanthropyInterest ?? 0,
+    loanOutstandingAfter:        row.loan_outstanding_after,
+    balancesAfter:               row.balances_after,
+    creditScore:                 row.credit_score,
+    createdAt:                   row.created_at,
+    totalDeductions:             row.total_deductions,
+    status:                      row.status ?? 'settled',
   }
 }
 
@@ -585,7 +586,10 @@ export async function addPayslip(payslip) {
     deductions:            payslip.deductions,
     gross:                 payslip.gross,
     net:                   payslip.net,
-    allocations:           payslip.allocations,
+    allocations:           {
+      ...(payslip.allocations ?? {}),
+      philanthropyInterest: payslip.philanthropyInterestEarned ?? 0,
+    },
     total_deductions:      payslip.totalDeductions,
     interest_earned:       payslip.interestEarned,
     loan_outstanding_after: payslip.loanOutstandingAfter,
@@ -795,6 +799,144 @@ export async function addLoanInterest(memberId, interestRate) {
     date: today(),
     relatedId: null,
   })
+}
+
+// ── Member Requests (donations + sub-goal withdrawals) ────────────────────────
+
+function mapMemberRequest(row) {
+  if (!row) return null
+  return {
+    id:          row.id,
+    familyId:    row.family_id,
+    memberId:    row.member_id,
+    type:        row.type,
+    status:      row.status,
+    amount:      row.amount,
+    description: row.description,
+    metadata:    row.metadata,
+    requestedAt: row.requested_at,
+    resolvedAt:  row.resolved_at,
+  }
+}
+
+export async function addMemberRequest(req) {
+  throwIfError(await supabase.from('member_requests').insert({
+    id:           req.id ?? crypto.randomUUID(),
+    family_id:    req.familyId,
+    member_id:    req.memberId,
+    type:         req.type,
+    status:       'pending',
+    amount:       req.amount,
+    description:  req.description,
+    metadata:     req.metadata ?? null,
+    requested_at: req.requestedAt ?? Date.now(),
+  }))
+}
+
+export async function getPendingMemberRequests(memberIds) {
+  if (!memberIds.length) return []
+  const { data, error } = await supabase
+    .from('member_requests')
+    .select('*')
+    .in('member_id', memberIds)
+    .eq('status', 'pending')
+    .order('requested_at', { ascending: false })
+  throwIfError({ error })
+  return (data ?? []).map(mapMemberRequest)
+}
+
+export async function resolveMemberRequest(id, status) {
+  throwIfError(await supabase
+    .from('member_requests')
+    .update({ status, resolved_at: Date.now() })
+    .eq('id', id))
+}
+
+// ── Donate from philanthropy (approve or parent-direct) ───────────────────────
+
+async function performDonation(memberId, amount, charityName) {
+  const member = await getMember(memberId)
+  if (!member) throw new Error('Member not found')
+  const current = member.accounts.philanthropy ?? 0
+  if (amount > current) throw new Error(`Insufficient philanthropy balance (${current} available)`)
+
+  await updateMemberAccounts(memberId, {
+    ...member.accounts,
+    philanthropy: current - amount,
+  })
+  await addTransaction({
+    id: crypto.randomUUID(), memberId,
+    type: 'withdrawal', amount: -amount,
+    description: `Donation to ${charityName}`,
+    date: today(), relatedId: null,
+  })
+}
+
+export async function approveDonation(requestId, memberId, amount, charityName) {
+  await performDonation(memberId, amount, charityName)
+  await resolveMemberRequest(requestId, 'approved')
+}
+
+export async function parentDonate(memberId, amount, charityName) {
+  await performDonation(memberId, amount, charityName)
+}
+
+// ── Sub-goal withdrawal (approve or parent-direct) ────────────────────────────
+// metadata: { subGoalId, subGoalName, destination: 'spending'|'philanthropy'|'subgoal',
+//             destinationSubGoalId?, deleteGoal }
+
+async function performSubGoalWithdrawal(memberId, amount, metadata) {
+  const member = await getMember(memberId)
+  if (!member) throw new Error('Member not found')
+
+  const subGoals = member.accounts.subGoals ?? []
+  const goal     = subGoals.find(sg => sg.id === metadata.subGoalId)
+  if (!goal) throw new Error('Sub-goal not found')
+  if (amount > goal.balance) throw new Error(`Insufficient sub-goal balance (${goal.balance} available)`)
+
+  // Deduct from sub-goal
+  let updatedGoals = subGoals.map(sg =>
+    sg.id === metadata.subGoalId ? { ...sg, balance: sg.balance - amount } : sg
+  )
+  // Delete if empty and requested
+  if (metadata.deleteGoal && updatedGoals.find(sg => sg.id === metadata.subGoalId)?.balance === 0) {
+    updatedGoals = updatedGoals.filter(sg => sg.id !== metadata.subGoalId)
+  }
+
+  const newAccounts = { ...member.accounts, subGoals: updatedGoals }
+
+  // Credit destination
+  let txDescription = ''
+  if (metadata.destination === 'spending') {
+    newAccounts.spending = (member.accounts.spending ?? 0) + amount
+    txDescription = `Withdraw from "${goal.name}" to spending`
+  } else if (metadata.destination === 'philanthropy') {
+    newAccounts.philanthropy = (member.accounts.philanthropy ?? 0) + amount
+    txDescription = `Withdraw from "${goal.name}" to philanthropy`
+  } else if (metadata.destination === 'subgoal' && metadata.destinationSubGoalId) {
+    newAccounts.subGoals = newAccounts.subGoals.map(sg =>
+      sg.id === metadata.destinationSubGoalId ? { ...sg, balance: sg.balance + amount } : sg
+    )
+    const destGoal = subGoals.find(sg => sg.id === metadata.destinationSubGoalId)
+    txDescription = `Transfer from "${goal.name}" to "${destGoal?.name ?? 'goal'}"`
+  }
+
+  await updateMemberAccounts(memberId, newAccounts)
+  await addTransaction({
+    id: crypto.randomUUID(), memberId,
+    type: 'withdrawal', amount: -amount,
+    description: txDescription,
+    date: today(), relatedId: null,
+  })
+}
+
+export async function approveSubGoalWithdrawal(requestId, memberId, amount, metadata) {
+  await performSubGoalWithdrawal(memberId, amount, metadata)
+  await resolveMemberRequest(requestId, 'approved')
+}
+
+export async function parentSubGoalWithdrawal(memberId, amount, metadata) {
+  await performSubGoalWithdrawal(memberId, amount, metadata)
 }
 
 // ── Per-child economic config ─────────────────────────────────────────────────
