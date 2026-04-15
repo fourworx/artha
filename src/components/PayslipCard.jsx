@@ -194,9 +194,6 @@ export default function PayslipCard({ payslip, member, familyName }) {
         {interestEarned > 0 && (
           <Row label="+ Interest on savings" value={fmt(interestEarned)} positive />
         )}
-        {payslip.philanthropyInterestEarned > 0 && (
-          <Row label="+ Interest on philanthropy" value={fmt(payslip.philanthropyInterestEarned)} positive />
-        )}
       </div>
 
       {/* Footer */}

@@ -124,12 +124,11 @@ export function calculatePayslip({
   const spendingAfterLoan  = spending - loanRepayment
   const newLoanOutstanding = Math.max(0, outstandingWithInterest - loanRepayment)
 
-  // ── 8. Interest on existing savings, philanthropy, and sub-goals ─
-  const interestEarned          = calculateWeeklyInterest(member.accounts.savings, config.interestRate)
-  const philanthropyBalance     = member.accounts.philanthropy ?? 0
-  const philanthropyInterest    = calculateWeeklyInterest(philanthropyBalance, config.interestRate)
+  // ── 8. Interest on savings and sub-goals (philanthropy earns no interest) ─
+  const interestEarned      = calculateWeeklyInterest(member.accounts.savings, config.interestRate)
+  const philanthropyBalance = member.accounts.philanthropy ?? 0
 
-  // Sub-goals: each earns the same interest rate
+  // Sub-goals: each earns the same interest rate as savings
   const subGoals      = member.accounts.subGoals ?? []
   const subGoalsAfter = subGoals.map(sg => ({
     ...sg,
@@ -139,7 +138,7 @@ export function calculatePayslip({
   // ── 9. New balances ──────────────────────────────────────────────
   const newSavings      = member.accounts.savings + savingsAlloc + interestEarned
   const newSpending     = member.accounts.spending + spendingAfterLoan
-  const newPhilanthropy = philanthropyBalance + philanthropyAlloc + philanthropyInterest
+  const newPhilanthropy = philanthropyBalance + philanthropyAlloc   // no interest
 
   return {
     earnings: {
@@ -168,7 +167,7 @@ export function calculatePayslip({
       spending:     spendingAfterLoan,
     },
     interestEarned,
-    philanthropyInterestEarned: philanthropyInterest,
+    philanthropyInterestEarned: 0,
     loanOutstandingAfter: newLoanOutstanding,
     balancesAfter: {
       spending:     newSpending,
@@ -335,10 +334,10 @@ export async function settlePayslip(payslipId) {
       amount: ps.interestEarned,
       description: `Savings interest (${Math.round(family.config.interestRate * 100)}%/wk)`,
     },
-    (ps.allocations?.philanthropy > 0 || ps.philanthropyInterestEarned > 0) && {
+    ps.allocations?.philanthropy > 0 && {
       type: 'deposit',
-      amount: (ps.allocations?.philanthropy ?? 0) + (ps.philanthropyInterestEarned ?? 0),
-      description: `Philanthropy${ps.philanthropyInterestEarned > 0 ? ` + interest` : ''}`,
+      amount: ps.allocations.philanthropy,
+      description: 'Philanthropy allocation',
     },
     ps.deductions.loanInterest > 0 && {
       type: 'loan_interest',
