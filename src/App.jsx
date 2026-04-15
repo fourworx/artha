@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
-import { useState, useEffect, createContext, useContext } from 'react'
+import { useState, useEffect } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { FamilyProvider, useFamily } from './context/FamilyContext'
 import { getPendingLogsForMembers, getPendingMemberRequests, getDeviceClaim, getOrCreateDeviceId } from './db/operations'
@@ -41,9 +41,8 @@ import History    from './views/child-tier2/History'
 // Child Tier 1
 import CoinJar from './views/child-tier1/CoinJar'
 
-// ── Device context ────────────────────────────────────────────────────────────
-export const DeviceContext = createContext(null)
-export function useDevice() { return useContext(DeviceContext) }
+import { DeviceContext } from './context/DeviceContext'
+export { useDevice } from './context/DeviceContext'
 
 // ── Device gate ───────────────────────────────────────────────────────────────
 // localStorage key for persisting the claim so it's synchronous on return visits

@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useFamily } from '../context/FamilyContext'
-import { useDevice } from '../App'
+import { useDevice } from '../context/DeviceContext'
 import { Delete } from 'lucide-react'
 
 // ── PIN Pad ───────────────────────────────────────────────────────────────────
