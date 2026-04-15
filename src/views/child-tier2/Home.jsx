@@ -13,6 +13,43 @@ import CreditScorePopup from '../../components/CreditScorePopup'
 import NetWorthChart from '../../components/NetWorthChart'
 import SavingsGrowthChart from '../../components/SavingsGrowthChart'
 
+// ── Sparkline ─────────────────────────────────────────────────────────────────
+function Sparkline({ data, color }) {
+  if (!data || data.length < 2) return null
+  const W = 200, H = 38
+  const PAD = 3
+  const min = Math.min(...data)
+  const max = Math.max(...data)
+  const range = max - min || 1
+  const toX = i => PAD + (i / (data.length - 1)) * (W - PAD * 2)
+  const toY = v => (H - PAD) - ((v - min) / range) * (H - PAD * 2)
+  const pts = data.map((v, i) => ({ x: toX(i), y: toY(v) }))
+  const line = pts.map(p => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')
+  const last = pts[pts.length - 1]
+  const areaD = [
+    `M ${pts[0].x.toFixed(1)} ${H}`,
+    ...pts.map(p => `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`),
+    `L ${last.x.toFixed(1)} ${H}`,
+    'Z',
+  ].join(' ')
+  // stable gradient ID based on color
+  const gid = `spk-${color.replace(/[^a-z0-9]/gi, '')}`
+  return (
+    <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: H, display: 'block' }}>
+      <defs>
+        <linearGradient id={gid} x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0%" stopColor={color} stopOpacity="0.18" />
+          <stop offset="100%" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={areaD} fill={`url(#${gid})`} />
+      <polyline points={line} fill="none" stroke={color} strokeWidth="1.5"
+        strokeLinejoin="round" strokeLinecap="round" />
+      <circle cx={last.x} cy={last.y} r={2.5} fill={color} />
+    </svg>
+  )
+}
+
 // ── Prepayment sheet ──────────────────────────────────────────────────────────
 function PrepaySheet({ loan, spending, memberId, onDone, onClose, fmt }) {
   const outstanding    = loan.outstanding
@@ -243,6 +280,34 @@ export default function Tier2Home() {
   const philanthropy    = accounts.philanthropy ?? 0
   const loanOutstanding = accounts.loan?.outstanding ?? 0
 
+  // ── Hero card data ───────────────────────────────────────────────────────────
+  // Wallet sparkline: spending balance per settled payslip
+  const walletHistory = payslips.map(p => p.balancesAfter?.spending ?? 0)
+
+  // Spent per period: derived from consecutive wallet balances + allocs
+  const spentHistory = payslips.map((p, i) => {
+    const prevWallet = i === 0 ? 0 : (payslips[i - 1].balancesAfter?.spending ?? 0)
+    const alloc      = p.allocations?.spending ?? 0
+    const newWallet  = p.balancesAfter?.spending ?? 0
+    return Math.max(0, prevWallet + alloc - newWallet)
+  })
+
+  // Spent this period = drop in wallet since last settled payslip
+  const lastSettledWallet  = payslips.length > 0
+    ? (payslips[payslips.length - 1].balancesAfter?.spending ?? 0)
+    : null
+  const spentThisPeriod    = lastSettledWallet !== null
+    ? Math.max(0, lastSettledWallet - (accounts.spending ?? 0))
+    : null
+  const prevPeriodSpent    = spentHistory.length >= 2
+    ? spentHistory[spentHistory.length - 2]
+    : null
+
+  // Wallet delta vs last payslip
+  const walletDelta = lastSettledWallet !== null
+    ? (accounts.spending ?? 0) - lastSettledWallet
+    : null
+
   // ── Chart data ───────────────────────────────────────────────────────────────
   const netWorthData = payslips.map(p => {
     const b = p.balancesAfter ?? {}
@@ -304,20 +369,53 @@ export default function Tier2Home() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
-        {/* Spending wallet — hero card */}
-        <button onClick={() => navigate('/child/history')}
-          className="w-full p-4 rounded-xl text-left transition-all active:scale-95"
-          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-          <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SPENDING WALLET</p>
-          <p className="text-4xl font-mono font-bold mt-1" style={{ color: 'var(--positive)' }}>
-            {fmt(accounts.spending ?? 0)}
-          </p>
-          <p className="text-xs font-mono mt-1 flex items-center gap-1" style={{ color: 'var(--text-muted)' }}>
-            View history <ChevronRight size={12} />
-          </p>
-        </button>
+        {/* Hero row: Wallet + Spent */}
+        <div className="grid grid-cols-2 gap-3">
+          {/* Wallet card */}
+          <button onClick={() => navigate('/child/ledger')}
+            className="p-3 rounded-xl text-left transition-all active:scale-95 flex flex-col"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>WALLET</p>
+            <p className="text-2xl font-mono font-bold mt-0.5 leading-none" style={{ color: 'var(--positive)' }}>
+              {fmt(accounts.spending ?? 0)}
+            </p>
+            {walletDelta !== null && (
+              <p className="text-xs font-mono mt-1" style={{
+                color: walletDelta >= 0 ? 'var(--positive)' : 'var(--negative)',
+              }}>
+                {walletDelta >= 0 ? '+' : ''}{fmt(walletDelta)} since last pay
+              </p>
+            )}
+            {walletHistory.length >= 2 && (
+              <div className="mt-2 -mx-1">
+                <Sparkline data={walletHistory} color="#4ade80" />
+              </div>
+            )}
+          </button>
 
-        {/* Savings + Goal row */}
+          {/* Spent card */}
+          <button onClick={() => navigate('/child/ledger')}
+            className="p-3 rounded-xl text-left transition-all active:scale-95 flex flex-col"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SPENT</p>
+            <p className="text-2xl font-mono font-bold mt-0.5 leading-none"
+              style={{ color: spentThisPeriod > 0 ? 'var(--negative)' : 'var(--text-dim)' }}>
+              {spentThisPeriod !== null ? fmt(spentThisPeriod) : '—'}
+            </p>
+            {prevPeriodSpent !== null && (
+              <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-dim)' }}>
+                {fmt(prevPeriodSpent)} last period
+              </p>
+            )}
+            {spentHistory.length >= 2 && (
+              <div className="mt-2 -mx-1">
+                <Sparkline data={spentHistory} color="#f87171" />
+              </div>
+            )}
+          </button>
+        </div>
+
+        {/* Savings + Philanthropy row */}
         <div className="grid grid-cols-2 gap-3">
           <button onClick={() => navigate('/child/savings')}
             className="p-4 rounded-xl text-left transition-all active:scale-95"
@@ -339,7 +437,7 @@ export default function Tier2Home() {
               {fmt(philanthropy)}
             </p>
             <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
-              {Math.round(((currentMember?.config?.interestRate ?? family?.config?.interestRate) ?? 0.02) * 100)}%/{periodLabel} interest
+              {Math.round(((currentMember?.config?.philanthropyPercent ?? family?.config?.philanthropyPercent) ?? 0.03) * 100)}% of pay
             </p>
           </button>
         </div>
