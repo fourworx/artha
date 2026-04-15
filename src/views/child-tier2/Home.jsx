@@ -373,10 +373,10 @@ export default function Tier2Home() {
         <div className="grid grid-cols-2 gap-3">
           {/* Wallet card */}
           <button onClick={() => navigate('/child/ledger')}
-            className="p-3 rounded-xl text-left transition-all active:scale-95 flex flex-col"
+            className="p-4 rounded-xl text-left transition-all active:scale-95 flex flex-col"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>WALLET</p>
-            <p className="text-2xl font-mono font-bold mt-0.5 leading-none" style={{ color: 'var(--positive)' }}>
+            <p className="text-2xl font-mono font-bold mt-1" style={{ color: 'var(--positive)' }}>
               {fmt(accounts.spending ?? 0)}
             </p>
             {walletDelta !== null && (
@@ -398,10 +398,10 @@ export default function Tier2Home() {
 
           {/* Spent card */}
           <button onClick={() => navigate('/child/ledger')}
-            className="p-3 rounded-xl text-left transition-all active:scale-95 flex flex-col"
+            className="p-4 rounded-xl text-left transition-all active:scale-95 flex flex-col"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SPENT</p>
-            <p className="text-2xl font-mono font-bold mt-0.5 leading-none"
+            <p className="text-2xl font-mono font-bold mt-1"
               style={{ color: spentThisPeriod > 0 ? 'var(--negative)' : 'var(--text-dim)' }}>
               {spentThisPeriod !== null ? fmt(spentThisPeriod) : '—'}
             </p>
