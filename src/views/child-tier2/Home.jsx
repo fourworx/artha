@@ -15,7 +15,16 @@ import SavingsGrowthChart from '../../components/SavingsGrowthChart'
 
 // ── Sparkline ─────────────────────────────────────────────────────────────────
 function Sparkline({ data, color }) {
-  if (!data || data.length < 2) return null
+  // Show a flat placeholder when not enough data yet
+  if (!data || data.length < 2) {
+    return (
+      <svg viewBox="0 0 200 38" style={{ width: '100%', height: 38, display: 'block' }}>
+        <line x1="3" y1="30" x2="197" y2="30"
+          stroke={color} strokeWidth="1.5" strokeDasharray="4,4" opacity="0.2"
+          strokeLinecap="round" />
+      </svg>
+    )
+  }
   const W = 200, H = 38
   const PAD = 3
   const min = Math.min(...data)
@@ -386,11 +395,9 @@ export default function Tier2Home() {
                 {walletDelta >= 0 ? '+' : ''}{fmt(walletDelta)} since last pay
               </p>
             )}
-            {walletHistory.length >= 2 && (
-              <div className="mt-2 -mx-1">
-                <Sparkline data={walletHistory} color="#4ade80" />
-              </div>
-            )}
+            <div className="mt-2 -mx-1">
+              <Sparkline data={walletHistory} color="#4ade80" />
+            </div>
             <p className="text-xs font-mono mt-1 flex items-center gap-0.5" style={{ color: 'var(--text-dim)' }}>
               View history <ChevronRight size={11} />
             </p>
@@ -410,11 +417,9 @@ export default function Tier2Home() {
                 {fmt(prevPeriodSpent)} last period
               </p>
             )}
-            {spentHistory.length >= 2 && (
-              <div className="mt-2 -mx-1">
-                <Sparkline data={spentHistory} color="#f87171" />
-              </div>
-            )}
+            <div className="mt-2 -mx-1">
+              <Sparkline data={spentHistory} color="#f87171" />
+            </div>
           </button>
         </div>
 
