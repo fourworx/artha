@@ -4,12 +4,15 @@ import { useAuth } from '../../context/AuthContext'
 import { useFamily, useCurrency, usePeriod } from '../../context/FamilyContext'
 import { displayDate, today } from '../../utils/dates'
 import { calculatePayslip } from '../../engine/payslip'
-import { getChoreLogsForPeriod, getChores, getUtilityCharges, makeEarlyRepayment, getLatestPayslip, markCreditPopupSeen } from '../../db/operations'
+import { getChoreLogsForPeriod, getChores, getUtilityCharges, makeEarlyRepayment, getLatestPayslip, markCreditPopupSeen, getPayslips } from '../../db/operations'
 import { calculateStreak } from '../../engine/chores'
 import { FAMILY_ID } from '../../utils/constants'
 import { daysAgo } from '../../utils/dates'
 import { ChevronRight, X } from 'lucide-react'
 import CreditScorePopup from '../../components/CreditScorePopup'
+import CreditGauge from '../../components/CreditGauge'
+import NetWorthChart from '../../components/NetWorthChart'
+import SavingsGrowthChart from '../../components/SavingsGrowthChart'
 
 // ── Prepayment sheet ──────────────────────────────────────────────────────────
 function PrepaySheet({ loan, spending, memberId, onDone, onClose, fmt }) {
@@ -155,11 +158,23 @@ export default function Tier2Home() {
   const [streak,          setStreak]          = useState(0)
   const [showPrepay,      setShowPrepay]      = useState(false)
   const [creditPopup,     setCreditPopup]     = useState(null) // { score, prevScore }
+  const [payslips,        setPayslips]        = useState([])
 
   // Refresh member data each time this view mounts so balance reflects
   // any payslip or bonus credits that happened since login.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { refreshMember() }, [])
+
+  // Load payslips for charts
+  useEffect(() => {
+    if (!currentMember) return
+    getPayslips(currentMember.id).then(ps => {
+      const settled = ps
+        .filter(p => p.status === 'settled')
+        .sort((a, b) => a.periodEnd.localeCompare(b.periodEnd))
+      setPayslips(settled)
+    }).catch(() => {})
+  }, [currentMember?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   // Credit score popup — show once per pay period
   useEffect(() => {
@@ -225,6 +240,31 @@ export default function Tier2Home() {
   const accounts        = currentMember?.accounts ?? {}
   const philanthropy    = accounts.philanthropy ?? 0
   const loanOutstanding = accounts.loan?.outstanding ?? 0
+
+  // ── Chart data ───────────────────────────────────────────────────────────────
+  const netWorthData = payslips.map(p => {
+    const b = p.balancesAfter ?? {}
+    const nw = (b.spending ?? 0) + (b.savings ?? 0) + (b.philanthropy ?? 0) - (b.loan?.outstanding ?? 0)
+    const d = new Date(p.periodEnd + 'T12:00:00')
+    const label = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).toUpperCase().replace(' ', '-')
+    return { label, value: nw }
+  })
+
+  const savingsActual = payslips.map(p => {
+    const d = new Date(p.periodEnd + 'T12:00:00')
+    const label = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).toUpperCase().replace(' ', '-')
+    return { label, value: p.balancesAfter?.savings ?? 0 }
+  })
+
+  const savingsProjected = (() => {
+    const interestRate = (currentMember?.config?.interestRate ?? family?.config?.interestRate) ?? 0.02
+    const periodicSavings = projected?.savings ?? 0
+    let balance = accounts.savings ?? 0
+    return Array.from({ length: 8 }, (_, i) => {
+      balance = (balance * (1 + interestRate)) + periodicSavings
+      return { label: `+${i + 1}`, value: Math.round(balance) }
+    })
+  })()
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -357,6 +397,29 @@ export default function Tier2Home() {
             </p>
           </div>
         )}
+
+        {/* ── Stats section ── */}
+        <p className="text-xs font-mono px-1 mt-1" style={{ color: 'var(--text-muted)' }}>STATS</p>
+
+        {/* Credit Report Card */}
+        <div className="p-4 rounded-xl flex flex-col items-center"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          <CreditGauge score={currentMember?.creditScore ?? 500} />
+        </div>
+
+        {/* Net worth over time */}
+        <div className="p-4 rounded-xl flex flex-col gap-2"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>NET WORTH OVER TIME</p>
+          <NetWorthChart data={netWorthData} />
+        </div>
+
+        {/* Savings growth + projection */}
+        <div className="p-4 rounded-xl flex flex-col gap-2"
+          style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+          <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SAVINGS GROWTH</p>
+          <SavingsGrowthChart actualData={savingsActual} projected={savingsProjected} />
+        </div>
 
         {/* Quick actions */}
         <p className="text-xs font-mono px-1 mt-1" style={{ color: 'var(--text-muted)' }}>QUICK ACCESS</p>

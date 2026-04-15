@@ -1,10 +1,50 @@
 import { useState } from 'react'
-import { Landmark, ArrowUpRight } from 'lucide-react'
+import { Landmark, ArrowUpRight, Target } from 'lucide-react'
 import { useFamily, useCurrency } from '../../context/FamilyContext'
-import { updateTaxFund } from '../../db/operations'
+import { updateTaxFund, updateFamilyConfig } from '../../db/operations'
 import { roundRupees } from '../../utils/currency'
 import { displayDateFull, today } from '../../utils/dates'
 import { FAMILY_ID } from '../../utils/constants'
+
+function Thermometer({ balance, goal }) {
+  if (!goal || goal <= 0) return null
+  const pct = Math.min(1, balance / goal)
+  const H = 120, W = 32, barH = Math.round(pct * (H - 16)), radius = W / 2
+
+  const color = pct >= 1 ? '#4ade80' : pct >= 0.6 ? '#fbbf24' : '#60a5fa'
+
+  return (
+    <div className="flex flex-col items-center gap-2">
+      <svg width={W + 20} height={H + 24} viewBox={`0 0 ${W + 20} ${H + 24}`}>
+        {/* Goal marker */}
+        <line x1={4} y1={8} x2={W + 16} y2={8}
+          stroke="var(--border-bright)" strokeWidth="1.5" strokeDasharray="3,2" />
+        <text x={W + 18} y={11} textAnchor="end"
+          fontSize="7" fontFamily="monospace" fill="var(--text-dim)">GOAL</text>
+
+        {/* Tube background */}
+        <rect x={10} y={8} width={W} height={H} rx={radius}
+          fill="var(--bg-raised)" stroke="var(--border)" strokeWidth="1" />
+
+        {/* Fill */}
+        {barH > 0 && (
+          <rect x={10} y={8 + (H - barH)} width={W} height={barH}
+            rx={barH >= H ? radius : `0 0 ${radius} ${radius}`}
+            fill={color} opacity="0.75" />
+        )}
+
+        {/* Pct label */}
+        <text x={10 + W / 2} y={8 + H / 2 + 4} textAnchor="middle"
+          fontSize="9" fontFamily="monospace" fontWeight="bold" fill="var(--text-primary)">
+          {Math.round(pct * 100)}%
+        </text>
+      </svg>
+      <p style={{ fontSize: 9, fontFamily: 'monospace', color: 'var(--text-dim)', letterSpacing: '1px' }}>
+        {pct >= 1 ? 'GOAL REACHED!' : `${Math.round(pct * 100)}% of goal`}
+      </p>
+    </div>
+  )
+}
 
 const SPEND_REASONS = [
   'Family treat',
@@ -23,9 +63,23 @@ export default function TaxFund() {
   const [customReason, setCustomReason] = useState('')
   const [saving,       setSaving]       = useState(false)
   const [error,        setError]        = useState('')
+  const [goalInput,    setGoalInput]    = useState('')
+  const [editingGoal,  setEditingGoal]  = useState(false)
+  const [savingGoal,   setSavingGoal]   = useState(false)
 
   const balance = family?.taxFundBalance ?? 0
   const history = [...(family?.taxFundHistory ?? [])].reverse()
+  const goal    = family?.config?.taxFundGoal ?? 0
+
+  const handleSaveGoal = async () => {
+    const g = roundRupees(Number(goalInput))
+    if (isNaN(g) || g < 0) return
+    setSavingGoal(true)
+    await updateFamilyConfig(FAMILY_ID, { ...family.config, taxFundGoal: g })
+    await reload()
+    setEditingGoal(false)
+    setSavingGoal(false)
+  }
 
   const effectiveReason = reason === 'Custom' ? customReason : reason
 
@@ -67,17 +121,60 @@ export default function TaxFund() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-5">
-        {/* Balance */}
-        <div className="flex flex-col items-center py-6 gap-1 rounded-xl"
+        {/* Balance + thermometer */}
+        <div className="flex items-center gap-4 p-4 rounded-xl"
           style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-          <Landmark size={28} style={{ color: 'var(--text-muted)' }} />
-          <p className="text-xs font-mono mt-2" style={{ color: 'var(--text-muted)' }}>TOTAL BALANCE</p>
-          <p className="text-4xl font-mono font-bold" style={{ color: 'var(--positive)' }}>
-            {fmt(balance)}
-          </p>
-          <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-dim)' }}>
-            Collected from family taxes
-          </p>
+          {/* Thermometer */}
+          {goal > 0 && <Thermometer balance={balance} goal={goal} />}
+
+          {/* Balance info */}
+          <div className="flex-1 flex flex-col gap-1">
+            <div className="flex items-center gap-2">
+              <Landmark size={18} style={{ color: 'var(--text-muted)' }} />
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>TOTAL BALANCE</p>
+            </div>
+            <p className="text-3xl font-mono font-bold" style={{ color: 'var(--positive)' }}>
+              {fmt(balance)}
+            </p>
+            <p className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
+              Collected from family taxes
+            </p>
+
+            {/* Goal setting */}
+            <div className="flex items-center gap-2 mt-2">
+              <Target size={12} style={{ color: 'var(--text-dim)' }} />
+              {editingGoal ? (
+                <div className="flex items-center gap-1 flex-1">
+                  <input
+                    type="number" min={0}
+                    value={goalInput}
+                    onChange={e => setGoalInput(e.target.value)}
+                    placeholder="Set goal"
+                    className="flex-1 rounded px-2 py-1 text-xs font-mono outline-none"
+                    style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)', maxWidth: 90 }}
+                    autoFocus
+                  />
+                  <button onClick={handleSaveGoal} disabled={savingGoal}
+                    className="text-xs font-mono px-2 py-1 rounded"
+                    style={{ background: 'rgba(74,222,128,0.15)', color: 'var(--positive)' }}>
+                    Save
+                  </button>
+                  <button onClick={() => setEditingGoal(false)}
+                    className="text-xs font-mono px-2 py-1 rounded"
+                    style={{ color: 'var(--text-dim)' }}>
+                    ×
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setGoalInput(goal > 0 ? String(goal) : ''); setEditingGoal(true) }}
+                  className="text-xs font-mono"
+                  style={{ color: 'var(--text-dim)' }}>
+                  {goal > 0 ? `Goal: ${fmt(goal)}` : 'Set a goal →'}
+                </button>
+              )}
+            </div>
+          </div>
         </div>
 
         {/* Spend form */}

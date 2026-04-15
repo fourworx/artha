@@ -1,11 +1,13 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useFamily, useCurrency, usePeriod } from '../../context/FamilyContext'
-import { getPayslips, getTransactionsForPeriod, parentDonate, parentSubGoalWithdrawal } from '../../db/operations'
+import { getPayslips, getTransactionsForPeriod, getTransactions, parentDonate, parentSubGoalWithdrawal } from '../../db/operations'
 import { settlePayslip } from '../../engine/payslip'
 import PayslipCard from '../../components/PayslipCard'
 import { displayDate, today } from '../../utils/dates'
 import { ChevronLeft, ChevronDown, ChevronUp, Heart, Target } from 'lucide-react'
+import NetWorthChart from '../../components/NetWorthChart'
+import SpendingBreakdown from '../../components/SpendingBreakdown'
 
 const TYPE_META = {
   salary:        { label: 'Salary',            emoji: '💼', color: 'var(--positive)' },
@@ -94,6 +96,7 @@ export default function ChildDetail() {
   const [periodSummary, setPeriodSummary] = useState(null)
   const [settling,      setSettling]      = useState(null)
   const [settleError,   setSettleError]   = useState(null)
+  const [allTxs,        setAllTxs]        = useState([])
 
   // Parent-direct philanthropy actions
   const [donateSheet,   setDonateSheet]   = useState(false)   // open/close
@@ -111,8 +114,12 @@ export default function ChildDetail() {
 
   useEffect(() => {
     if (!memberId) return
-    getPayslips(memberId).then(ps => {
+    Promise.all([
+      getPayslips(memberId),
+      getTransactions(memberId, 200),
+    ]).then(([ps, txs]) => {
       setPayslips([...ps].sort((a, b) => b.periodEnd.localeCompare(a.periodEnd)))
+      setAllTxs(txs)
       setLoading(false)
     })
   }, [memberId])
@@ -198,6 +205,18 @@ export default function ChildDetail() {
   const accounts        = child.accounts ?? {}
   const loanOutstanding = accounts.loan?.outstanding ?? 0
   const subGoals        = accounts.subGoals ?? []
+
+  // Chart data
+  const netWorthData = [...payslips]
+    .filter(p => p.status === 'settled')
+    .sort((a, b) => a.periodEnd.localeCompare(b.periodEnd))
+    .map(p => {
+      const b = p.balancesAfter ?? {}
+      const nw = (b.spending ?? 0) + (b.savings ?? 0) + (b.philanthropy ?? 0) - (b.loan?.outstanding ?? 0)
+      const d = new Date(p.periodEnd + 'T12:00:00')
+      const label = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).toUpperCase().replace(' ', '-')
+      return { label, value: nw }
+    })
 
   const score = child.creditScore ?? 500
   const scoreColor = score >= 700 ? 'var(--positive)' : score >= 500 ? 'var(--warning)' : 'var(--negative)'
@@ -330,6 +349,25 @@ export default function ChildDetail() {
                 </div>
               ))}
             </div>
+          </div>
+        )}
+
+        {/* Analytics */}
+        {netWorthData.length >= 2 && (
+          <div className="flex flex-col gap-3">
+            <p className="text-xs font-mono px-1" style={{ color: 'var(--text-muted)' }}>ANALYTICS</p>
+            <div className="p-4 rounded-xl flex flex-col gap-2"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>NET WORTH OVER TIME</p>
+              <NetWorthChart data={netWorthData} />
+            </div>
+            {allTxs.length > 0 && (
+              <div className="p-4 rounded-xl flex flex-col gap-2"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+                <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>WHERE DOES MONEY GO</p>
+                <SpendingBreakdown transactions={allTxs} />
+              </div>
+            )}
           </div>
         )}
 
