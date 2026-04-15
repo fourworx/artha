@@ -391,6 +391,9 @@ export default function Tier2Home() {
                 <Sparkline data={walletHistory} color="#4ade80" />
               </div>
             )}
+            <p className="text-xs font-mono mt-1 flex items-center gap-0.5" style={{ color: 'var(--text-dim)' }}>
+              View history <ChevronRight size={11} />
+            </p>
           </button>
 
           {/* Spent card */}
