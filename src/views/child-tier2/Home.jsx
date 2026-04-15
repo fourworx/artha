@@ -326,8 +326,22 @@ export default function Tier2Home() {
     return { label, value: nw }
   })
 
-  const savingsHistory      = payslips.map(p => p.balancesAfter?.savings      ?? 0)
-  const philanthropyHistory = payslips.map(p => p.balancesAfter?.philanthropy ?? 0)
+  const savingsHistory = payslips.map(p => p.balancesAfter?.savings ?? 0)
+
+  // Cumulative donations over time: whenever philanthropy balance drops between
+  // payslips that means a donation happened. Flat line = not giving = problem.
+  const cumulativeDonations = (() => {
+    let total = 0
+    return payslips.map((p, i) => {
+      const prev = i === 0 ? (p.balancesAfter?.philanthropy ?? 0) : (payslips[i - 1].balancesAfter?.philanthropy ?? 0)
+      const curr = p.balancesAfter?.philanthropy ?? 0
+      const alloc = p.allocations?.philanthropy ?? 0
+      // drop beyond what was allocated = donations made this period
+      const donated = Math.max(0, prev + alloc - curr)
+      total += donated
+      return total
+    })
+  })()
 
   const savingsActual = payslips.map(p => {
     const d = new Date(p.periodEnd + 'T12:00:00')
@@ -451,10 +465,10 @@ export default function Tier2Home() {
               {fmt(philanthropy)}
             </p>
             <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
-              {Math.round(((currentMember?.config?.philanthropyPercent ?? family?.config?.philanthropyPercent) ?? 0.03) * 100)}% of pay
+              cumulative donations ↑
             </p>
             <div className="mt-2 -mx-1">
-              <Sparkline data={philanthropyHistory} color="#4ade80" />
+              <Sparkline data={cumulativeDonations} color="#4ade80" />
             </div>
           </button>
         </div>

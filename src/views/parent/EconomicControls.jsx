@@ -65,11 +65,13 @@ export default function EconomicControls() {
 
   const [taxRate,          setTaxRate]          = useState(0.12)
   const [rentAmount,       setRentAmount]       = useState(30)
+  const [utilitiesAmount,  setUtilitiesAmount]  = useState(0)
   const [interestRate,     setInterestRate]     = useState(0.02)
   const [loanInterestRate, setLoanInterestRate] = useState(0.05)
   const [autoSave,         setAutoSave]         = useState(0.20)
   const [philanthropyPct,  setPhilanthropyPct]  = useState(0.03)
 
+  const [advancedMode, setAdvancedMode] = useState(false)
   const [saving, setSaving] = useState(false)
   const [saved,  setSaved]  = useState(false)
 
@@ -105,6 +107,7 @@ export default function EconomicControls() {
   function loadEconomicSliders(cfg) {
     setTaxRate(cfg.taxRate ?? 0.12)
     setRentAmount(cfg.rentAmount ?? 30)
+    setUtilitiesAmount(cfg.utilitiesAmount ?? 0)
     setInterestRate(cfg.interestRate ?? 0.02)
     setLoanInterestRate(cfg.loanInterestRate ?? 0.05)
     setAutoSave(cfg.autoSavePercent ?? 0.20)
@@ -148,6 +151,7 @@ export default function EconomicControls() {
     const economicFields = {
       taxRate,
       rentAmount,
+      utilitiesAmount,
       interestRate,
       loanInterestRate: Math.max(loanInterestRate, interestRate),
       autoSavePercent: autoSave,
@@ -194,7 +198,7 @@ export default function EconomicControls() {
   const amtFmt = v => `${curr.symbol}${v}`
   const gross  = 200
   const tax    = Math.round(gross * taxRate)
-  const net    = Math.max(0, gross - tax - rentAmount)
+  const net    = Math.max(0, gross - tax - rentAmount - utilitiesAmount)
 
   const nonParentChildren = children.filter(ch => !ch.isParent)
   const selectedChild = nonParentChildren.find(ch => ch.id === selectedChildId)
@@ -317,18 +321,41 @@ export default function EconomicControls() {
             )}
           </div>
 
-          {/* Same for all toggle */}
-          <Toggle
+          {/* Simple / Advanced mode toggle */}
+          <div className="flex gap-2 p-1 rounded-xl" style={{ background: 'var(--bg-raised)' }}>
+            {[['simple', 'Simple'], ['advanced', 'Advanced']].map(([mode, label]) => {
+              const active = advancedMode ? mode === 'advanced' : mode === 'simple'
+              return (
+                <button key={mode} onClick={() => setAdvancedMode(mode === 'advanced')}
+                  className="flex-1 py-2 rounded-lg text-xs font-mono font-semibold transition-all"
+                  style={{
+                    background: active ? 'var(--bg-surface)' : 'transparent',
+                    border: active ? '1px solid var(--border)' : '1px solid transparent',
+                    color: active ? 'var(--text-primary)' : 'var(--text-muted)',
+                  }}>
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+          {!advancedMode && (
+            <p className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
+              Simple mode shows the essentials. Switch to Advanced for interest rates, loan settings, per-child overrides, and more.
+            </p>
+          )}
+
+          {/* Same for all toggle — advanced only */}
+          {advancedMode && <Toggle
             on={sameForAll}
             onToggle={handleSameForAllToggle}
             label="Same for all children"
             sub={sameForAll
               ? 'All children share the same rates below'
               : 'Each child can have different rates — select a child to edit'}
-          />
+          />}
 
-          {/* Per-child selector */}
-          {!sameForAll && (
+          {/* Per-child selector — advanced only */}
+          {advancedMode && !sameForAll && (
             <div className="flex flex-col gap-2">
               <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>EDITING FOR</label>
               <div className="flex gap-2">
@@ -382,8 +409,8 @@ export default function EconomicControls() {
             </div>
           )}
 
-          {/* Economic sliders — only visible when sameForAll OR a child is selected */}
-          {(sameForAll || selectedChildId) && (
+          {/* Economic sliders */}
+          {(sameForAll || selectedChildId || !advancedMode) && (
             <div className="flex flex-col gap-5">
               <SliderRow label="TAX RATE"
                 value={taxRate} min={0} max={0.30} step={0.01}
@@ -395,43 +422,56 @@ export default function EconomicControls() {
                 display={amtFmt} onChange={setRentAmount}
               />
 
-              <SliderRow label={`SAVINGS INTEREST / ${payPeriod === 'monthly' ? 'MONTH' : 'WEEK'}`}
-                value={interestRate} min={0} max={0.10} step={0.005}
-                display={pct} onChange={onSavingsRateChange}
-              />
-
-              <div className="flex flex-col gap-2">
-                <SliderRow label={`LOAN INTEREST / ${payPeriod === 'monthly' ? 'MONTH' : 'WEEK'}`}
-                  value={loanInterestRate} min={interestRate} max={0.20} step={0.005}
-                  display={pct} onChange={onLoanRateChange}
-                />
-                {loanInterestRate === interestRate && (
-                  <p className="text-xs font-mono" style={{ color: 'var(--warning)' }}>
-                    ⚠ Loan rate equals savings rate — arbitrage possible. Consider raising it.
-                  </p>
-                )}
-                {loanInterestRate > interestRate && (
-                  <p className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
-                    Spread: {pct(loanInterestRate - interestRate)} — borrowing costs more than saving earns ✓
-                  </p>
-                )}
-              </div>
-
               <SliderRow label="AUTO-SAVE %"
                 value={autoSave} min={0} max={0.50} step={0.05}
                 display={pct} onChange={setAutoSave}
               />
 
-              <SliderRow label="PHILANTHROPY %"
-                value={philanthropyPct} min={0} max={0.20} step={0.01}
-                display={pct} onChange={setPhilanthropyPct}
-              />
+              {/* Advanced-only sliders */}
+              {advancedMode && <>
+                <div className="flex flex-col gap-1.5">
+                  <SliderRow label={`RECURRING UTILITIES / ${payPeriod === 'monthly' ? 'MONTH' : 'WEEK'} (${curr.symbol})`}
+                    value={utilitiesAmount} min={0} max={payPeriod === 'monthly' ? 200 : 50} step={payPeriod === 'monthly' ? 10 : 5}
+                    display={amtFmt} onChange={setUtilitiesAmount}
+                  />
+                  <p className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
+                    Fixed charge every payslip (electricity, internet, etc.). Ad-hoc charges are added separately via Utilities.
+                  </p>
+                </div>
+
+                <SliderRow label={`SAVINGS INTEREST / ${payPeriod === 'monthly' ? 'MONTH' : 'WEEK'}`}
+                  value={interestRate} min={0} max={0.10} step={0.005}
+                  display={pct} onChange={onSavingsRateChange}
+                />
+
+                <div className="flex flex-col gap-2">
+                  <SliderRow label={`LOAN INTEREST / ${payPeriod === 'monthly' ? 'MONTH' : 'WEEK'}`}
+                    value={loanInterestRate} min={interestRate} max={0.20} step={0.005}
+                    display={pct} onChange={onLoanRateChange}
+                  />
+                  {loanInterestRate === interestRate && (
+                    <p className="text-xs font-mono" style={{ color: 'var(--warning)' }}>
+                      ⚠ Loan rate equals savings rate — arbitrage possible. Consider raising it.
+                    </p>
+                  )}
+                  {loanInterestRate > interestRate && (
+                    <p className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
+                      Spread: {pct(loanInterestRate - interestRate)} — borrowing costs more than saving earns ✓
+                    </p>
+                  )}
+                </div>
+
+                <SliderRow label="PHILANTHROPY %"
+                  value={philanthropyPct} min={0} max={0.20} step={0.01}
+                  display={pct} onChange={setPhilanthropyPct}
+                />
+              </>}
             </div>
           )}
         </div>
 
         {/* ── Example ── */}
-        {(sameForAll || selectedChildId) && (
+        {(sameForAll || selectedChildId || !advancedMode) && (
           <div className="px-3 py-3 rounded-xl flex flex-col gap-2"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
@@ -440,10 +480,11 @@ export default function EconomicControls() {
             {[
               ['Tax',             `−${curr.symbol}${tax}`],
               ['Rent',            `−${curr.symbol}${rentAmount}`],
+              ...(advancedMode && utilitiesAmount > 0 ? [['Utilities', `−${curr.symbol}${utilitiesAmount}`]] : []),
               ['Net',             `${curr.symbol}${net}`],
               ['→ Savings',       `${curr.symbol}${Math.round(net * autoSave)}`],
-              ['→ Philanthropy',  `${curr.symbol}${Math.round(net * philanthropyPct)}`],
-              ['→ Spending',      `${curr.symbol}${Math.round(net * (1 - autoSave - philanthropyPct))}`],
+              ...(advancedMode ? [['→ Philanthropy', `${curr.symbol}${Math.round(net * philanthropyPct)}`]] : []),
+              ['→ Spending',      `${curr.symbol}${Math.round(net * (1 - autoSave - (advancedMode ? philanthropyPct : 0)))}`],
             ].map(([k, v]) => (
               <div key={k} className="flex justify-between">
                 <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{k}</span>
@@ -453,7 +494,7 @@ export default function EconomicControls() {
           </div>
         )}
 
-        <button onClick={handleSave} disabled={saving || (!sameForAll && !selectedChildId)}
+        <button onClick={handleSave} disabled={saving || (advancedMode && !sameForAll && !selectedChildId)}
           className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
           style={{
             background: saved ? 'rgba(74,222,128,0.15)' : 'var(--accent-blue)',
@@ -464,7 +505,7 @@ export default function EconomicControls() {
           <Save size={16} />
           {saved ? 'Saved ✓'
             : saving ? 'Saving...'
-            : !sameForAll && selectedChild ? `Save for ${selectedChild.name}`
+            : advancedMode && !sameForAll && selectedChild ? `Save for ${selectedChild.name}`
             : 'Save Changes'}
         </button>
       </div>

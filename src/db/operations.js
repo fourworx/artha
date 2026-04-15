@@ -1232,3 +1232,76 @@ export async function approveTaxGoalVote(requestId, familyId, description, amoun
     .update({ status: 'approved', resolved_at: Date.now() })
     .eq('id', requestId))
 }
+
+// ── Device auth (invite codes + device claims) ────────────────────────────────
+
+function getOrCreateDeviceId() {
+  let id = localStorage.getItem('artha_device_id')
+  if (!id) {
+    id = crypto.randomUUID()
+    localStorage.setItem('artha_device_id', id)
+  }
+  return id
+}
+
+export { getOrCreateDeviceId }
+
+/** Generate a 6-char alphanumeric invite code for a specific member (10-min TTL). */
+export async function generateJoinCode(familyId, memberId) {
+  const code = Math.random().toString(36).slice(2, 8).toUpperCase()
+  const now = new Date()
+  const expiresAt = new Date(now.getTime() + 10 * 60 * 1000).toISOString()
+  throwIfError(await supabase.from('join_codes').insert({
+    code,
+    family_id: familyId,
+    member_id: memberId,
+    expires_at: expiresAt,
+    used_at: null,
+  }))
+  return { code, expiresAt }
+}
+
+/** Look up a device claim for this device. Returns null if unclaimed. */
+export async function getDeviceClaim() {
+  const deviceId = getOrCreateDeviceId()
+  const { data, error } = await supabase
+    .from('device_claims')
+    .select('*')
+    .eq('device_id', deviceId)
+    .maybeSingle()
+  if (error) return null
+  if (!data) return null
+  return { deviceId, familyId: data.family_id, memberId: data.member_id }
+}
+
+/** Redeem an invite code — ties this device to the family + member. */
+export async function claimDevice(code) {
+  const deviceId = getOrCreateDeviceId()
+  const now = new Date().toISOString()
+
+  // Fetch code
+  const { data: row, error } = await supabase
+    .from('join_codes')
+    .select('*')
+    .eq('code', code.toUpperCase())
+    .maybeSingle()
+  if (error || !row) throw new Error('Invalid code')
+  if (row.used_at) throw new Error('Code already used')
+  if (new Date(row.expires_at) < new Date()) throw new Error('Code expired')
+
+  // Mark code used
+  throwIfError(await supabase
+    .from('join_codes')
+    .update({ used_at: now })
+    .eq('code', code.toUpperCase()))
+
+  // Upsert device claim (allow re-claiming device)
+  throwIfError(await supabase.from('device_claims').upsert({
+    device_id: deviceId,
+    family_id: row.family_id,
+    member_id: row.member_id,
+    claimed_at: now,
+  }))
+
+  return { familyId: row.family_id, memberId: row.member_id }
+}

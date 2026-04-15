@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { useFamily } from '../context/FamilyContext'
+import { useDevice } from '../App'
 import { Delete } from 'lucide-react'
 
 // ── PIN Pad ───────────────────────────────────────────────────────────────────
@@ -111,9 +112,18 @@ export default function PinAuth() {
   const { login, loginError, setLoginError } = useAuth()
   const navigate = useNavigate()
 
+  const deviceClaim = useDevice()
+
   const [selectedMember, setSelectedMember] = useState(null)
   const [pin, setPin] = useState('')
   const [submitting, setSubmitting] = useState(false)
+
+  // If this device is claimed to a specific member, auto-select them
+  useEffect(() => {
+    if (!deviceClaim?.memberId || !members.length) return
+    const m = members.find(m => m.id === deviceClaim.memberId)
+    if (m) setSelectedMember(m)
+  }, [deviceClaim, members])
 
   // Reset PIN and error when switching member
   useEffect(() => {

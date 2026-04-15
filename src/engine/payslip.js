@@ -89,11 +89,12 @@ export function calculatePayslip({
   const gross = adjustedSalary + streakBonus
 
   // ── 4. Deductions ───────────────────────────────────────────────
-  const tax           = roundRupees(gross * config.taxRate)
-  const rent          = config.rentAmount
-  const utilityItems  = utilityCharges.map(u => ({ reason: u.reason, amount: u.amount, id: u.id }))
-  const totalUtilities = utilityItems.reduce((sum, u) => sum + u.amount, 0)
-  const totalDeductions = tax + rent + totalUtilities
+  const tax                = roundRupees(gross * config.taxRate)
+  const rent               = config.rentAmount
+  const recurringUtilities = config.utilitiesAmount ?? 0
+  const utilityItems       = utilityCharges.map(u => ({ reason: u.reason, amount: u.amount, id: u.id }))
+  const totalUtilities     = utilityItems.reduce((sum, u) => sum + u.amount, 0)
+  const totalDeductions    = tax + rent + recurringUtilities + totalUtilities
 
   // ── 5. Net ──────────────────────────────────────────────────────
   const net = Math.max(0, gross - totalDeductions)
@@ -152,6 +153,7 @@ export function calculatePayslip({
     deductions: {
       tax,
       rent,
+      recurringUtilities,
       utilities: utilityItems,
       totalUtilities,
       loanRepayment,
@@ -323,6 +325,11 @@ export async function settlePayslip(payslipId) {
       type: 'rent',
       amount: -ps.deductions.rent,
       description: 'Weekly rent',
+    },
+    (ps.deductions.recurringUtilities ?? 0) > 0 && {
+      type: 'utility',
+      amount: -(ps.deductions.recurringUtilities),
+      description: 'Recurring utilities',
     },
     ...(ps.deductions.utilities ?? []).map(u => ({
       type: 'utility',

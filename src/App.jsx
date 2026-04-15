@@ -1,11 +1,14 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, createContext, useContext } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { FamilyProvider, useFamily } from './context/FamilyContext'
-import { getPendingLogsForMembers, getPendingMemberRequests } from './db/operations'
+import { getPendingLogsForMembers, getPendingMemberRequests, getDeviceClaim, getOrCreateDeviceId } from './db/operations'
+import { supabase } from './db/supabase'
+import { FAMILY_ID } from './utils/constants'
 import ParentNav from './components/ParentNav'
 import ChildNav from './components/ChildNav'
 import InstallPrompt from './components/InstallPrompt'
+import JoinFamily from './views/auth/JoinFamily'
 
 // Auth
 import PinAuth from './auth/PinAuth'
@@ -23,6 +26,7 @@ import Backup           from './views/parent/Backup'
 import Members          from './views/parent/Members'
 import Loans            from './views/parent/Loans'
 import ChildDetail      from './views/parent/ChildDetail'
+import InviteCode       from './views/parent/InviteCode'
 
 // Child Tier 2 views
 import Tier2Home  from './views/child-tier2/Home'
@@ -36,6 +40,75 @@ import History    from './views/child-tier2/History'
 
 // Child Tier 1
 import CoinJar from './views/child-tier1/CoinJar'
+
+// ── Device context ────────────────────────────────────────────────────────────
+export const DeviceContext = createContext(null)
+export function useDevice() { return useContext(DeviceContext) }
+
+// ── Device gate ───────────────────────────────────────────────────────────────
+// localStorage key for persisting the claim so it's synchronous on return visits
+const CLAIM_KEY = 'artha_device_claim'
+
+function readCachedClaim() {
+  try {
+    const raw = localStorage.getItem(CLAIM_KEY)
+    return raw ? JSON.parse(raw) : null
+  } catch { return null }
+}
+
+function writeCachedClaim(claim) {
+  try { localStorage.setItem(CLAIM_KEY, JSON.stringify(claim)) } catch {}
+}
+
+function saveClaim(setClaim) {
+  return (claim) => {
+    writeCachedClaim(claim)
+    setClaim(claim)
+  }
+}
+
+// Runs before any routing. If this device has never been claimed,
+// show JoinFamily until the code is entered (or parent bypass used).
+function DeviceGate({ children }) {
+  // Initialise synchronously from localStorage — no loading flash for returning devices
+  const [claim, setClaimRaw] = useState(() => readCachedClaim())
+  const setClaim = saveClaim(setClaimRaw)
+
+  useEffect(() => {
+    // If we already have a cached claim, verify it against Supabase in the background
+    // (in case it was revoked) but don't block rendering
+    if (readCachedClaim()) return
+
+    // New device — query Supabase
+    getDeviceClaim()
+      .then(c => { if (c) setClaim(c) else setClaimRaw(null) })
+      .catch(() => setClaimRaw(null))
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [])
+
+  // claim === null  →  unclaimed device, show join screen
+  // claim === obj   →  claimed, proceed
+  if (claim === null) {
+    const handleSkip = async () => {
+      const deviceId = getOrCreateDeviceId()
+      await supabase.from('device_claims').upsert({
+        device_id: deviceId,
+        family_id: FAMILY_ID,
+        member_id: null,
+        claimed_at: new Date().toISOString(),
+      })
+      setClaim({ deviceId, familyId: FAMILY_ID, memberId: null })
+    }
+    return <JoinFamily onClaimed={setClaim} onSkip={handleSkip} />
+  }
+
+  // claim is truthy — device is known (or localStorage was populated)
+  return (
+    <DeviceContext.Provider value={claim}>
+      {children}
+    </DeviceContext.Provider>
+  )
+}
 
 // ── Placeholder ───────────────────────────────────────────────────────────────
 function ComingSoon({ label }) {
@@ -105,6 +178,7 @@ export default function App() {
   return (
     <BrowserRouter>
       <FamilyProvider>
+        <DeviceGate>
         <AuthProvider>
           <InstallPrompt />
         <Routes>
@@ -121,8 +195,9 @@ export default function App() {
               <Route path="rewards"  element={<RewardManager />} />
               <Route path="tax-fund" element={<TaxFund />} />
               <Route path="backup"   element={<Backup />} />
-              <Route path="members"  element={<Members />} />
-              <Route path="loans"    element={<Loans />} />
+              <Route path="members"     element={<Members />} />
+              <Route path="loans"       element={<Loans />} />
+              <Route path="invite-code" element={<InviteCode />} />
               <Route path="child/:memberId" element={<ChildDetail />} />
             </Route>
 
@@ -145,6 +220,7 @@ export default function App() {
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </AuthProvider>
+        </DeviceGate>
       </FamilyProvider>
     </BrowserRouter>
   )
