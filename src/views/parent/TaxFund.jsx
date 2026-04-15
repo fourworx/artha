@@ -68,6 +68,7 @@ export default function TaxFund() {
   const [goalLabel,    setGoalLabel]    = useState('')
   const [editingGoal,  setEditingGoal]  = useState(false)
   const [savingGoal,   setSavingGoal]   = useState(false)
+  const [deletingGoal, setDeletingGoal] = useState(false)
   const [votes,        setVotes]        = useState([])
   const [actingVote,   setActingVote]   = useState(null)
 
@@ -90,6 +91,14 @@ export default function TaxFund() {
     await reload()
     setEditingGoal(false)
     setSavingGoal(false)
+  }
+
+  const handleDeleteGoal = async () => {
+    setDeletingGoal(true)
+    const { taxFundGoal: _g, taxFundGoalLabel: _l, ...rest } = config
+    await updateFamilyConfig(FAMILY_ID, rest)
+    await reload()
+    setDeletingGoal(false)
   }
 
   const handleApproveVote = async (vote) => {
@@ -215,12 +224,23 @@ export default function TaxFund() {
                   </div>
                 </div>
               ) : (
-                <button
-                  onClick={() => { setGoalInput(goal > 0 ? String(goal) : ''); setGoalLabel(goalName); setEditingGoal(true) }}
-                  className="text-xs font-mono"
-                  style={{ color: 'var(--text-dim)' }}>
-                  {goal > 0 ? 'Edit goal →' : 'Set a goal →'}
-                </button>
+                <div className="flex items-center gap-3">
+                  <button
+                    onClick={() => { setGoalInput(goal > 0 ? String(goal) : ''); setGoalLabel(goalName); setEditingGoal(true) }}
+                    className="text-xs font-mono"
+                    style={{ color: 'var(--text-dim)' }}>
+                    {goal > 0 ? 'Edit goal →' : 'Set a goal →'}
+                  </button>
+                  {goal > 0 && (
+                    <button
+                      onClick={handleDeleteGoal}
+                      disabled={deletingGoal}
+                      className="text-xs font-mono"
+                      style={{ color: 'var(--negative)' }}>
+                      {deletingGoal ? '...' : 'Delete goal'}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>
