@@ -80,7 +80,7 @@ function DeviceGate({ children }) {
 
     // New device — query Supabase
     getDeviceClaim()
-      .then(c => { if (c) setClaim(c) else setClaimRaw(null) })
+      .then(c => { if (c) { setClaim(c) } else { setClaimRaw(null) } })
       .catch(() => setClaimRaw(null))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
