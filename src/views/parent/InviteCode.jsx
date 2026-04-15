@@ -11,7 +11,7 @@ export default function InviteCode() {
   const navigate = useNavigate()
   const { children } = useFamily()
 
-  const nonParents = children.filter(c => !c.isParent)
+  const nonParents = children // show all members including parents
   const [selectedId, setSelectedId] = useState(nonParents[0]?.id ?? null)
   const [code,       setCode]       = useState(null)
   const [expiresAt,  setExpiresAt]  = useState(null)
@@ -79,7 +79,7 @@ export default function InviteCode() {
         {/* Info */}
         <div className="px-3 py-2.5 rounded-xl text-xs font-mono"
           style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-muted)', lineHeight: '1.6' }}>
-          Generate a one-time code for a child's device. Once they enter it, their device will go straight to their PIN — no member selection needed.
+          Generate a one-time code for any family member's device. Once they enter it, their device will go straight to their PIN — no member selection needed.
         </div>
 
         {/* Child selector */}
@@ -170,8 +170,8 @@ export default function InviteCode() {
             <div className="flex flex-col gap-2">
               <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>HOW IT WORKS</p>
               {[
-                ['1', 'Generate a code for the child above'],
-                ['2', `${selectedMember?.name ?? 'Child'} opens Artha on their device for the first time`],
+                ['1', 'Generate a code for the family member above'],
+                ['2', `${selectedMember?.name ?? 'Member'} opens Artha on their device for the first time`],
                 ['3', 'They enter the 6-character code'],
                 ['4', 'Their device goes straight to their PIN — no member picker needed'],
               ].map(([n, txt]) => (

@@ -44,8 +44,7 @@
 ## PHASE 3 — Device Auth (P2 + C1)
 
 ### P2 device setup
-- [ ] P1: More → Invite Code → tap "All children" — wait, select P2's member
-  *(Note: generate a code for the second parent)*
+- [ ] P1: More → Invite Code → select P2 (parent member) → Generate Code
 - [ ] P1 generates code — 6-char code shown with countdown
 - [ ] P2 opens app → JoinFamily screen appears
 - [ ] P2 enters code → reaches PIN screen showing only P2's avatar
