@@ -326,6 +326,9 @@ export default function Tier2Home() {
     return { label, value: nw }
   })
 
+  const savingsHistory      = payslips.map(p => p.balancesAfter?.savings      ?? 0)
+  const philanthropyHistory = payslips.map(p => p.balancesAfter?.philanthropy ?? 0)
+
   const savingsActual = payslips.map(p => {
     const d = new Date(p.periodEnd + 'T12:00:00')
     const label = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).toUpperCase().replace(' ', '-')
@@ -426,7 +429,7 @@ export default function Tier2Home() {
         {/* Savings + Philanthropy row */}
         <div className="grid grid-cols-2 gap-3">
           <button onClick={() => navigate('/child/savings')}
-            className="p-4 rounded-xl text-left transition-all active:scale-95"
+            className="p-4 rounded-xl text-left transition-all active:scale-95 flex flex-col"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SAVINGS</p>
             <p className="text-2xl font-mono font-bold mt-1" style={{ color: 'var(--accent-blue)' }}>
@@ -435,10 +438,13 @@ export default function Tier2Home() {
             <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
               {Math.round(((currentMember?.config?.interestRate ?? family?.config?.interestRate) ?? 0.02) * 100)}%/{periodLabel} interest
             </p>
+            <div className="mt-2 -mx-1">
+              <Sparkline data={savingsHistory} color="#60a5fa" />
+            </div>
           </button>
 
           <button onClick={() => navigate('/child/goal')}
-            className="p-4 rounded-xl text-left transition-all active:scale-95"
+            className="p-4 rounded-xl text-left transition-all active:scale-95 flex flex-col"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>PHILANTHROPY</p>
             <p className="text-2xl font-mono font-bold mt-1" style={{ color: 'var(--positive)' }}>
@@ -447,6 +453,9 @@ export default function Tier2Home() {
             <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
               {Math.round(((currentMember?.config?.philanthropyPercent ?? family?.config?.philanthropyPercent) ?? 0.03) * 100)}% of pay
             </p>
+            <div className="mt-2 -mx-1">
+              <Sparkline data={philanthropyHistory} color="#4ade80" />
+            </div>
           </button>
         </div>
 
