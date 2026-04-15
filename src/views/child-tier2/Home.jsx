@@ -8,9 +8,8 @@ import { getChoreLogsForPeriod, getChores, getUtilityCharges, makeEarlyRepayment
 import { calculateStreak } from '../../engine/chores'
 import { FAMILY_ID } from '../../utils/constants'
 import { daysAgo } from '../../utils/dates'
-import { ChevronRight, X } from 'lucide-react'
+import { ChevronRight, X, Landmark } from 'lucide-react'
 import CreditScorePopup from '../../components/CreditScorePopup'
-import CreditGauge from '../../components/CreditGauge'
 import NetWorthChart from '../../components/NetWorthChart'
 import SavingsGrowthChart from '../../components/SavingsGrowthChart'
 
@@ -158,6 +157,7 @@ export default function Tier2Home() {
   const [streak,          setStreak]          = useState(0)
   const [showPrepay,      setShowPrepay]      = useState(false)
   const [creditPopup,     setCreditPopup]     = useState(null) // { score, prevScore }
+  const [latestPayslip,   setLatestPayslip]   = useState(null)
   const [payslips,        setPayslips]        = useState([])
 
   // Refresh member data each time this view mounts so balance reflects
@@ -176,16 +176,18 @@ export default function Tier2Home() {
     }).catch(() => {})
   }, [currentMember?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Credit score popup — show once per pay period
+  // Credit score popup — show once per pay period; also cache latestPayslip for on-demand tap
   useEffect(() => {
     if (!currentMember || !periodEnd) return
-    if (currentMember.lastCreditPopupPeriod === periodEnd) return
     const score = currentMember.creditScore ?? 500
     getLatestPayslip(currentMember.id)
       .then(payslip => {
-        setCreditPopup({ score, prevScore: payslip?.creditScore ?? null })
+        setLatestPayslip(payslip)
+        if (currentMember.lastCreditPopupPeriod !== periodEnd) {
+          setCreditPopup({ score, prevScore: payslip?.creditScore ?? null })
+        }
       })
-      .catch(() => setCreditPopup({ score, prevScore: null }))
+      .catch(() => {})
   }, [currentMember?.id, periodEnd]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const handleDismissCredit = async () => {
@@ -289,11 +291,12 @@ export default function Tier2Home() {
               const color = score >= 700 ? 'var(--positive)' : score >= 500 ? 'var(--warning)' : 'var(--negative)'
               const bg    = score >= 700 ? 'rgba(74,222,128,0.1)' : score >= 500 ? 'rgba(251,191,36,0.1)' : 'rgba(239,68,68,0.1)'
               return (
-                <span className="text-xs font-mono px-2 py-0.5 rounded-full"
-                  style={{ background: bg, color, border: `1px solid ${bg}` }}
-                  title="Credit score">
+                <button
+                  onClick={() => setCreditPopup({ score, prevScore: latestPayslip?.creditScore ?? null })}
+                  className="text-xs font-mono px-2 py-0.5 rounded-full active:scale-95"
+                  style={{ background: bg, color, border: `1px solid ${bg}` }}>
                   ★ {score}
-                </span>
+                </button>
               )
             })()}
           </div>
@@ -401,11 +404,23 @@ export default function Tier2Home() {
         {/* ── Stats section ── */}
         <p className="text-xs font-mono px-1 mt-1" style={{ color: 'var(--text-muted)' }}>STATS</p>
 
-        {/* Credit Report Card */}
-        <div className="p-4 rounded-xl flex flex-col items-center"
+        {/* Family Fund card */}
+        <button onClick={() => navigate('/child/family-fund')}
+          className="flex items-center justify-between px-4 py-3 rounded-xl w-full text-left transition-all active:scale-95"
           style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-          <CreditGauge score={currentMember?.creditScore ?? 500} />
-        </div>
+          <div className="flex items-center gap-3">
+            <Landmark size={18} style={{ color: 'var(--text-muted)' }} />
+            <div>
+              <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+                Family Fund
+              </p>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                {fmt(family?.taxFundBalance ?? 0)} collected · tap to see your contributions
+              </p>
+            </div>
+          </div>
+          <ChevronRight size={16} style={{ color: 'var(--text-dim)' }} />
+        </button>
 
         {/* Net worth over time */}
         <div className="p-4 rounded-xl flex flex-col gap-2"

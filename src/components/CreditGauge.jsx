@@ -8,16 +8,16 @@ export default function CreditGauge({ score = 500 }) {
   const pct   = Math.max(0, Math.min(1, (score - 300) / 550))
   const angle = Math.PI * (1 - pct)               // π → 0 as score goes 300 → 850
   const px    = cx + r * Math.cos(angle)
-  const py    = cy - r * Math.sin(angle)           // SVG y is inverted
-  const large = pct >= 0.5 ? 1 : 0
+  const py    = cy - r * Math.sin(angle)           // SVG y is inverted → subtract to go UP
 
-  // Paths
-  const bgArc = `M ${cx - r} ${cy} A ${r} ${r} 0 0 0 ${cx + r} ${cy}`
+  // sweep=1 (clockwise on screen) goes LEFT → UP → RIGHT (via top)
+  // large-arc-flag is always 0 for partial arcs < 180°; special-case the full arc
+  const bgArc = `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${cx + r} ${cy}`
   const fgArc = pct <= 0
     ? null
     : pct >= 0.999
-    ? `M ${cx - r} ${cy} A ${r} ${r} 0 1 0 ${(cx + r - 0.01).toFixed(2)} ${cy}`
-    : `M ${cx - r} ${cy} A ${r} ${r} 0 ${large} 0 ${px.toFixed(2)} ${py.toFixed(2)}`
+    ? `M ${cx - r} ${cy} A ${r} ${r} 0 1 1 ${(cx + r - 0.01).toFixed(2)} ${cy}`
+    : `M ${cx - r} ${cy} A ${r} ${r} 0 0 1 ${px.toFixed(2)} ${py.toFixed(2)}`
 
   const color = score >= 750 ? '#4ade80'
     : score >= 650 ? '#86efac'
@@ -35,11 +35,14 @@ export default function CreditGauge({ score = 500 }) {
   const ticks = [350, 500, 650, 750].map(s => {
     const p = (s - 300) / 550
     const a = Math.PI * (1 - p)
-    const x1 = cx + (r - sw / 2 - 1) * Math.cos(a)
-    const y1 = cy - (r - sw / 2 - 1) * Math.sin(a)
-    const x2 = cx + (r + sw / 2 + 1) * Math.cos(a)
-    const y2 = cy - (r + sw / 2 + 1) * Math.sin(a)
-    return { x1, y1, x2, y2 }
+    const inner = r - sw / 2 - 2
+    const outer = r + sw / 2 + 2
+    return {
+      x1: cx + inner * Math.cos(a),
+      y1: cy - inner * Math.sin(a),
+      x2: cx + outer * Math.cos(a),
+      y2: cy - outer * Math.sin(a),
+    }
   })
 
   return (

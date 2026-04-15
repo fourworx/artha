@@ -1,7 +1,7 @@
-import { useState } from 'react'
-import { Landmark, ArrowUpRight, Target } from 'lucide-react'
+import { useState, useEffect } from 'react'
+import { Landmark, ArrowUpRight, Target, Vote, Check, X } from 'lucide-react'
 import { useFamily, useCurrency } from '../../context/FamilyContext'
-import { updateTaxFund, updateFamilyConfig } from '../../db/operations'
+import { updateTaxFund, updateFamilyConfig, getPendingTaxGoalVotes, approveTaxGoalVote, resolveMemberRequest } from '../../db/operations'
 import { roundRupees } from '../../utils/currency'
 import { displayDateFull, today } from '../../utils/dates'
 import { FAMILY_ID } from '../../utils/constants'
@@ -55,8 +55,9 @@ const SPEND_REASONS = [
 ]
 
 export default function TaxFund() {
-  const { family, reload } = useFamily()
+  const { family, children, reload } = useFamily()
   const fmt = useCurrency()
+  const memberMap = Object.fromEntries((children ?? []).map(c => [c.id, c]))
 
   const [amount,       setAmount]       = useState('')
   const [reason,       setReason]       = useState('')
@@ -64,21 +65,48 @@ export default function TaxFund() {
   const [saving,       setSaving]       = useState(false)
   const [error,        setError]        = useState('')
   const [goalInput,    setGoalInput]    = useState('')
+  const [goalLabel,    setGoalLabel]    = useState('')
   const [editingGoal,  setEditingGoal]  = useState(false)
   const [savingGoal,   setSavingGoal]   = useState(false)
+  const [votes,        setVotes]        = useState([])
+  const [actingVote,   setActingVote]   = useState(null)
 
-  const balance = family?.taxFundBalance ?? 0
-  const history = [...(family?.taxFundHistory ?? [])].reverse()
-  const goal    = family?.config?.taxFundGoal ?? 0
+  const balance   = family?.taxFundBalance ?? 0
+  const history   = [...(family?.taxFundHistory ?? [])].reverse()
+  const config    = family?.config ?? {}
+  const goal      = config.taxFundGoal ?? 0
+  const goalName  = config.taxFundGoalLabel ?? ''
+
+  // Load pending child votes
+  useEffect(() => {
+    getPendingTaxGoalVotes(FAMILY_ID).then(setVotes).catch(() => {})
+  }, [])
 
   const handleSaveGoal = async () => {
     const g = roundRupees(Number(goalInput))
     if (isNaN(g) || g < 0) return
     setSavingGoal(true)
-    await updateFamilyConfig(FAMILY_ID, { ...family.config, taxFundGoal: g })
+    await updateFamilyConfig(FAMILY_ID, { ...config, taxFundGoal: g, taxFundGoalLabel: goalLabel.trim() })
     await reload()
     setEditingGoal(false)
     setSavingGoal(false)
+  }
+
+  const handleApproveVote = async (vote) => {
+    setActingVote(vote.id)
+    try {
+      await approveTaxGoalVote(vote.id, FAMILY_ID, vote.description, vote.amount, config)
+      await reload()
+      setVotes([])
+    } catch (e) { alert(e.message) }
+    finally { setActingVote(null) }
+  }
+
+  const handleDenyVote = async (vote) => {
+    setActingVote(vote.id)
+    await resolveMemberRequest(vote.id, 'denied')
+    setVotes(prev => prev.filter(v => v.id !== vote.id))
+    setActingVote(null)
   }
 
   const effectiveReason = reason === 'Custom' ? customReason : reason
@@ -140,37 +168,58 @@ export default function TaxFund() {
               Collected from family taxes
             </p>
 
-            {/* Goal setting */}
+            {/* Goal display + edit */}
+            {!editingGoal && goal > 0 && (
+              <div className="mt-1">
+                <p className="text-xs font-mono" style={{ color: 'var(--accent-blue)' }}>
+                  🎯 {goalName || fmt(goal)}
+                </p>
+                {goalName && (
+                  <p className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
+                    Target {fmt(goal)} · {fmt(Math.max(0, goal - balance))} to go
+                  </p>
+                )}
+              </div>
+            )}
             <div className="flex items-center gap-2 mt-2">
               <Target size={12} style={{ color: 'var(--text-dim)' }} />
               {editingGoal ? (
-                <div className="flex items-center gap-1 flex-1">
+                <div className="flex flex-col gap-1.5 flex-1">
                   <input
-                    type="number" min={0}
-                    value={goalInput}
-                    onChange={e => setGoalInput(e.target.value)}
-                    placeholder="Set goal"
-                    className="flex-1 rounded px-2 py-1 text-xs font-mono outline-none"
-                    style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)', maxWidth: 90 }}
+                    className="w-full rounded px-2 py-1 text-xs font-mono outline-none"
+                    style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                    placeholder="Goal label (e.g. Family trip to Goa)"
+                    value={goalLabel}
+                    onChange={e => setGoalLabel(e.target.value)}
                     autoFocus
                   />
-                  <button onClick={handleSaveGoal} disabled={savingGoal}
-                    className="text-xs font-mono px-2 py-1 rounded"
-                    style={{ background: 'rgba(74,222,128,0.15)', color: 'var(--positive)' }}>
-                    Save
-                  </button>
-                  <button onClick={() => setEditingGoal(false)}
-                    className="text-xs font-mono px-2 py-1 rounded"
-                    style={{ color: 'var(--text-dim)' }}>
-                    ×
-                  </button>
+                  <div className="flex gap-1">
+                    <input
+                      type="number" min={0}
+                      value={goalInput}
+                      onChange={e => setGoalInput(e.target.value)}
+                      placeholder="Target amount"
+                      className="flex-1 rounded px-2 py-1 text-xs font-mono outline-none"
+                      style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                    />
+                    <button onClick={handleSaveGoal} disabled={savingGoal}
+                      className="text-xs font-mono px-2 py-1 rounded"
+                      style={{ background: 'rgba(74,222,128,0.15)', color: 'var(--positive)' }}>
+                      Save
+                    </button>
+                    <button onClick={() => setEditingGoal(false)}
+                      className="text-xs font-mono px-2 py-1 rounded"
+                      style={{ color: 'var(--text-dim)' }}>
+                      ×
+                    </button>
+                  </div>
                 </div>
               ) : (
                 <button
-                  onClick={() => { setGoalInput(goal > 0 ? String(goal) : ''); setEditingGoal(true) }}
+                  onClick={() => { setGoalInput(goal > 0 ? String(goal) : ''); setGoalLabel(goalName); setEditingGoal(true) }}
                   className="text-xs font-mono"
                   style={{ color: 'var(--text-dim)' }}>
-                  {goal > 0 ? `Goal: ${fmt(goal)}` : 'Set a goal →'}
+                  {goal > 0 ? 'Edit goal →' : 'Set a goal →'}
                 </button>
               )}
             </div>
@@ -226,6 +275,51 @@ export default function TaxFund() {
             {saving ? 'Processing...' : `Spend ${amount ? fmt(Number(amount)) : '—'}`}
           </button>
         </div>
+
+        {/* Child goal suggestions */}
+        {votes.length > 0 && (
+          <div className="flex flex-col gap-3">
+            <div className="flex items-center gap-2 px-1">
+              <Vote size={13} style={{ color: 'var(--accent-blue)' }} />
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                GOAL SUGGESTIONS ({votes.length})
+              </p>
+            </div>
+            {votes.map(vote => {
+              const isActing = actingVote === vote.id
+              return (
+                <div key={vote.id} className="flex items-center gap-3 p-3 rounded-xl"
+                  style={{ background: 'var(--bg-surface)', border: '1px solid rgba(96,165,250,0.25)', opacity: isActing ? 0.5 : 1 }}>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-mono font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                      {vote.description}
+                    </p>
+                    <div className="flex items-center gap-2 mt-0.5">
+                      <span className="text-xs font-mono font-semibold" style={{ color: 'var(--accent-blue)' }}>
+                        {fmt(vote.amount)}
+                      </span>
+                      <span className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
+                        {memberMap[vote.memberId]
+                          ? `${memberMap[vote.memberId].avatar} ${memberMap[vote.memberId].name}`
+                          : 'from child'}
+                      </span>
+                    </div>
+                  </div>
+                  <button disabled={isActing} onClick={() => handleDenyVote(vote)}
+                    className="p-2 rounded-lg active:scale-95"
+                    style={{ background: 'rgba(248,113,113,0.15)', color: 'var(--negative)' }}>
+                    <X size={16} />
+                  </button>
+                  <button disabled={isActing} onClick={() => handleApproveVote(vote)}
+                    className="p-2 rounded-lg active:scale-95"
+                    style={{ background: 'rgba(74,222,128,0.15)', color: 'var(--positive)' }}>
+                    <Check size={16} />
+                  </button>
+                </div>
+              )
+            })}
+          </div>
+        )}
 
         {/* History */}
         {history.length > 0 && (

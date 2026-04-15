@@ -1156,3 +1156,79 @@ export async function importAllData(data) {
     ))
   }
 }
+
+// ── Tax Fund goal voting ──────────────────────────────────────────────────────
+
+export async function getTaxTransactions(memberId) {
+  const { data, error } = await supabase
+    .from('transactions')
+    .select('*')
+    .eq('member_id', memberId)
+    .eq('type', 'tax')
+    .order('date', { ascending: true })
+  throwIfError({ error })
+  return (data ?? []).map(mapTransaction)
+}
+
+export async function addTaxGoalVote(memberId, familyId, description, amount) {
+  // Cancel any existing pending vote from this member first
+  await supabase
+    .from('member_requests')
+    .update({ status: 'cancelled', resolved_at: Date.now() })
+    .eq('member_id', memberId)
+    .eq('type', 'tax_goal_vote')
+    .eq('status', 'pending')
+
+  throwIfError(await supabase.from('member_requests').insert({
+    id:           crypto.randomUUID(),
+    family_id:    familyId,
+    member_id:    memberId,
+    type:         'tax_goal_vote',
+    status:       'pending',
+    amount,
+    description,
+    metadata:     null,
+    requested_at: Date.now(),
+  }))
+}
+
+export async function getPendingTaxGoalVotes(familyId) {
+  const { data, error } = await supabase
+    .from('member_requests')
+    .select('*')
+    .eq('family_id', familyId)
+    .eq('type', 'tax_goal_vote')
+    .eq('status', 'pending')
+    .order('requested_at', { ascending: false })
+  throwIfError({ error })
+  return (data ?? []).map(mapMemberRequest)
+}
+
+export async function cancelMyTaxGoalVote(memberId) {
+  throwIfError(await supabase
+    .from('member_requests')
+    .update({ status: 'cancelled', resolved_at: Date.now() })
+    .eq('member_id', memberId)
+    .eq('type', 'tax_goal_vote')
+    .eq('status', 'pending'))
+}
+
+export async function approveTaxGoalVote(requestId, familyId, description, amount, currentConfig) {
+  // Set goal on family config
+  await updateFamilyConfig(familyId, {
+    ...currentConfig,
+    taxFundGoal:      amount,
+    taxFundGoalLabel: description,
+  })
+  // Approve this vote, cancel all others from this family
+  await supabase
+    .from('member_requests')
+    .update({ status: 'cancelled', resolved_at: Date.now() })
+    .eq('family_id', familyId)
+    .eq('type', 'tax_goal_vote')
+    .eq('status', 'pending')
+  throwIfError(await supabase
+    .from('member_requests')
+    .update({ status: 'approved', resolved_at: Date.now() })
+    .eq('id', requestId))
+}
