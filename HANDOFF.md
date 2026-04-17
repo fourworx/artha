@@ -241,3 +241,121 @@ npm run build && npx cap sync
 ```
 
 Optional: push notifications for payday reminders via Capacitor Push Notifications plugin.
+
+---
+
+## Commercial Distribution Plan
+
+*Decided 2026-04-17. Currently in personal testing phase. Distribution comes after testing is complete.*
+
+### Strategy
+Bootstrap venture. Test with own family first → fix all bugs and polish → then proceed to App Store + Play Store distribution with monetisation.
+
+---
+
+### What needs to change before distribution (build order)
+
+#### Phase A — Finish personal testing (NOW)
+- Test all features with real family data
+- Fix all bugs found during testing
+- Polish UI/UX
+
+#### Phase B — Multi-tenant architecture (most critical)
+The single biggest change. Currently `FAMILY_ID = 'dev-family-001'` is hardcoded — all users would share the same database.
+
+Changes required:
+- Generate `FAMILY_ID` as `crypto.randomUUID()` during onboarding (already happening in `createFamily()`) — need to persist it to `localStorage('artha_family_id')` and read it everywhere instead of the constant
+- Remove `FAMILY_ID` from `constants.js` entirely
+- Add **Row Level Security (RLS)** policies to all 12 Supabase tables so `family_id` gates every query
+- Every Supabase query that doesn't already filter by `family_id` must be updated
+
+RLS policy pattern (same for every table):
+```sql
+alter table members enable row level security;
+create policy "family isolation" on members
+  using (family_id = current_setting('app.family_id', true));
+```
+Then set `app.family_id` per-request via Supabase client config or a custom JWT claim.
+
+Simpler alternative: use Supabase Auth JWT — store `family_id` in the JWT `app_metadata`, and RLS reads `auth.jwt() ->> 'family_id'`. Ties neatly into Phase C.
+
+#### Phase C — Supabase Auth for founding parent
+Currently the founding parent only has a PIN. If all devices are lost, the family account is unrecoverable.
+
+Changes required:
+- During onboarding Step 1: collect founding parent's **email + password** (Supabase Auth `signUp`)
+- This creates a Supabase Auth session with `user.id` and `app_metadata.family_id`
+- Subsequent logins: email+password once → then PIN for daily use
+- Required by Apple/Google: must offer account deletion — `deleteFamily()` operation that wipes all rows where `family_id = X` and deletes the Supabase Auth user
+
+#### Phase D — Legal & compliance
+- **Privacy Policy**: publish at a URL (e.g. artha.app/privacy). Required by both stores.
+- **Terms of Service**: publish at a URL.
+- **Account deletion flow**: in-app button (Settings → Delete Family Account) that triggers full data wipe.
+- **COPPA / GDPR-K**: app involves children's data. Children do not create accounts themselves (parents manage everything) — this keeps compliance simpler. Note this in privacy policy.
+- **Age rating**: both stores will ask about child-directed content. Declare appropriately.
+
+#### Phase E — Capacitor native app
+```bash
+npm install @capacitor/core @capacitor/cli @capacitor/ios @capacitor/android
+npx cap init Artha com.artha.app --web-dir dist
+npx cap add ios && npx cap add android
+npm run build && npx cap sync
+```
+- Configure bundle ID, signing certificates, icons, splash screen
+- iOS: Xcode → TestFlight → App Store
+- Android: Android Studio → signed APK/AAB → Play Console
+
+#### Phase F — Monetisation
+Recommended model: **free 30-day trial → subscription**.
+- Use RevenueCat (SDK wraps Apple + Google billing in one API)
+- Suggested pricing: ~₹499/month or ₹3,999/year (adjust for market)
+- Gate premium features after trial (e.g. multi-child, loans, charts)
+- Apple takes 15% (small developer programme, <$1M revenue); Google takes 15% for first $1M/year
+
+#### Phase G — Push notifications
+- Supabase Edge Function + pg_cron: runs `runPayslip` at midnight on payday
+- Capacitor Push Notifications plugin for APNs (Apple) + FCM (Google)
+- Notification: "Payslip ready for [Child] — tap to review and settle"
+
+---
+
+### Cost breakdown (bootstrap)
+
+#### One-time costs
+| Item | Cost |
+|------|------|
+| Apple Developer Account | $99/year (~₹8,300) |
+| Google Play Developer Account | $25 one-time (~₹2,100) |
+| Domain (e.g. artha.app) | ~$15/year (~₹1,250) |
+| **Total first year one-time** | **~$140 / ₹11,700** |
+
+#### Monthly recurring (at launch)
+| Item | Cost | Notes |
+|------|------|-------|
+| Supabase Pro | $25/month | Essential — free tier pauses DB after 1 week of inactivity. Pro = always-on, daily backups, 8GB DB |
+| Vercel Pro | $0–20/month | Free hobby tier is fine for PWA. Go Pro ($20) when you need commercial SLA. For pure native Capacitor app, Vercel is optional — assets are bundled in the APK. |
+| RevenueCat | $0/month | Free up to $2,500 monthly tracked revenue |
+| **Total monthly** | **$25–45/month** | **₹2,100–3,800/month** |
+
+#### Break-even (subscription model)
+At ₹499/month per family, after store cut (15%): ~₹424 net per family.
+- Supabase + domain costs: ~₹2,200/month
+- Break even: **~6 paying families**
+- Profitable from family #7 onwards
+
+#### Free tier limits (Supabase) — when to upgrade
+| Limit | Free | Pro |
+|-------|------|-----|
+| Database size | 500MB | 8GB |
+| Monthly active users | 50,000 | 100,000 |
+| Database pauses | Yes (1 wk inactivity) | Never |
+| Daily backups | No | Yes |
+| **Verdict** | Dev/testing only | Use for production |
+
+**Bottom line: ₹2,100/month (~$25) gets you a production-grade backend that can serve hundreds of families comfortably. Start on Supabase Free for testing, switch to Pro the day you launch.**
+
+---
+
+### Tech stack stays the same
+React + Vite + Supabase + Capacitor is the right professional stack for this. No need to switch anything. The core changes are architectural (multi-tenant, auth) not a rewrite.
