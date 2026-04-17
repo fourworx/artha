@@ -167,7 +167,7 @@ function MemberSheet({ member, addingRole, onDone, onClose }) {
             <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>NAME</label>
             <input
               value={name} onChange={e => setName(e.target.value)}
-              placeholder="Child's name"
+              placeholder={isParent ? "Parent's name" : "Child's name"}
               className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
               style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
             />
