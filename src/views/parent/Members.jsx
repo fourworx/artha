@@ -6,19 +6,27 @@ import { updateMember, addMember } from '../../db/operations'
 import { hashPin } from '../../auth/pinUtils'
 import { FAMILY_ID } from '../../utils/constants'
 
-const AVATARS = [
+const CHILD_AVATARS = [
   '👦','👧','🧒','👶','🐒','🐻','🦁','🐯',
   '🐸','🐼','🦊','🐨','🦄','🦋','🐬','🦅',
-  '🧑','👱','🧔','👩','👨','🐶','🐱','🐭',
+]
+
+const PARENT_AVATARS = [
+  '👨','👩','👴','👵','🧑','👨‍💼','👩‍💼','👨‍🦱',
+  '👩‍🦱','👨‍🦳','👩‍🦳','🧔','👱','👱‍♀️','🙎','🙎‍♀️',
 ]
 
 // ── Member edit / create sheet ────────────────────────────────────────────────
-function MemberSheet({ member, onDone, onClose }) {
+function MemberSheet({ member, addingRole, onDone, onClose }) {
   const isNew = !member
   const fmt   = useCurrency()
 
+  // When adding new: addingRole tells us 'child' or 'parent'
+  const isParent = member ? member.role === 'parent' : addingRole === 'parent'
+
+  const defaultAvatar = isParent ? '👨' : '👦'
   const [name,       setName]       = useState(member?.name ?? '')
-  const [avatar,     setAvatar]     = useState(member?.avatar ?? '👦')
+  const [avatar,     setAvatar]     = useState(member?.avatar ?? defaultAvatar)
   const [tier,       setTier]       = useState(member?.tier ?? 2)
   const [salary,     setSalary]     = useState(String(member?.baseSalary ?? 0))
   const [newPin,     setNewPin]     = useState('')
@@ -26,8 +34,6 @@ function MemberSheet({ member, onDone, onClose }) {
   const [goalTarget, setGoalTarget] = useState(String(member?.accounts?.goalJar?.target ?? 0))
   const [saving,     setSaving]     = useState(false)
   const [error,      setError]      = useState('')
-
-  const isParent = member?.role === 'parent'
 
   const handleSave = async () => {
     if (!name.trim()) { setError('Name is required'); return }
@@ -53,23 +59,32 @@ function MemberSheet({ member, onDone, onClose }) {
       }
 
       if (isNew) {
-        const goalJar = tier === 1 && goalName.trim()
-          ? { name: goalName.trim(), target: Number(goalTarget) || 100, balance: 0 }
-          : tier === 2 && goalName.trim()
-          ? { name: goalName.trim(), target: Number(goalTarget) || 100, balance: 0 }
-          : null
+        if (isParent) {
+          await addMember({
+            familyId: FAMILY_ID,
+            role: 'parent',
+            name: changes.name,
+            avatar: changes.avatar,
+            pin: changes.pin,
+            accounts: { spending: 0, savings: 0, philanthropy: 0 },
+          })
+        } else {
+          const goalJar = goalName.trim()
+            ? { name: goalName.trim(), target: Number(goalTarget) || 100, balance: 0 }
+            : null
 
-        await addMember({
-          familyId: FAMILY_ID,
-          role: 'child',
-          tier,
-          name: changes.name,
-          avatar: changes.avatar,
-          pin: changes.pin,
-          baseSalary: changes.baseSalary,
-          accounts: { spending: 0, savings: 0, goalJar },
-          creditScore: 500,
-        })
+          await addMember({
+            familyId: FAMILY_ID,
+            role: 'child',
+            tier,
+            name: changes.name,
+            avatar: changes.avatar,
+            pin: changes.pin,
+            baseSalary: changes.baseSalary,
+            accounts: { spending: 0, savings: 0, goalJar },
+            creditScore: 500,
+          })
+        }
       } else {
         // Update goal jar for existing children — preserve balance, only update name/target
         if (!isParent) {
@@ -119,7 +134,7 @@ function MemberSheet({ member, onDone, onClose }) {
         <div className="flex items-center justify-between px-4 py-3"
           style={{ borderBottom: '1px solid var(--border)' }}>
           <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
-            {isNew ? 'Add Child' : `Edit — ${member.name}`}
+            {isNew ? (isParent ? 'Add Parent' : 'Add Child') : `Edit — ${member.name}`}
           </span>
           <button onClick={onClose} style={{ color: 'var(--text-muted)' }}><X size={18} /></button>
         </div>
@@ -129,7 +144,7 @@ function MemberSheet({ member, onDone, onClose }) {
           <div className="flex flex-col gap-2">
             <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>AVATAR</label>
             <div className="grid grid-cols-8 gap-2">
-              {AVATARS.map(e => (
+              {(isParent ? PARENT_AVATARS : CHILD_AVATARS).map(e => (
                 <button
                   key={e}
                   onClick={() => setAvatar(e)}
@@ -252,7 +267,7 @@ function MemberSheet({ member, onDone, onClose }) {
               color: saving ? 'var(--text-dim)' : '#fff',
             }}
           >
-            {saving ? 'Saving...' : isNew ? 'Add Child' : 'Save Changes'}
+            {saving ? 'Saving...' : isNew ? (isParent ? 'Add Parent' : 'Add Child') : 'Save Changes'}
           </button>
         </div>
       </div>
@@ -266,15 +281,17 @@ export default function Members() {
   const { members, children, parents, reload } = useFamily()
   const fmt = useCurrency()
 
-  const [editing,   setEditing]   = useState(null)   // member object or 'new'
-  const [showSheet, setShowSheet] = useState(false)
+  const [editing,    setEditing]    = useState(null)   // member object, or null for new
+  const [addingRole, setAddingRole] = useState('child')
+  const [showSheet,  setShowSheet]  = useState(false)
 
   const openEdit = (member) => {
     setEditing(member)
     setShowSheet(true)
   }
-  const openAdd = () => {
+  const openAdd = (role) => {
     setEditing(null)
+    setAddingRole(role)
     setShowSheet(true)
   }
 
@@ -292,14 +309,24 @@ export default function Members() {
             Family Members
           </h2>
         </div>
-        <button
-          onClick={openAdd}
-          className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all active:scale-95"
-          style={{ background: 'var(--accent-blue)', color: '#fff' }}
-        >
-          <Plus size={14} />
-          Add Child
-        </button>
+        <div className="flex gap-2">
+          <button
+            onClick={() => openAdd('child')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all active:scale-95"
+            style={{ background: 'var(--accent-blue)', color: '#fff' }}
+          >
+            <Plus size={14} />
+            Child
+          </button>
+          <button
+            onClick={() => openAdd('parent')}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all active:scale-95"
+            style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+          >
+            <Plus size={14} />
+            Parent
+          </button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
@@ -371,6 +398,7 @@ export default function Members() {
       {showSheet && (
         <MemberSheet
           member={editing}
+          addingRole={addingRole}
           onDone={reload}
           onClose={() => setShowSheet(false)}
         />
