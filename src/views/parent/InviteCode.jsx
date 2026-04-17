@@ -9,10 +9,10 @@ const CODE_TTL_SECS = 600 // 10 minutes
 
 export default function InviteCode() {
   const navigate = useNavigate()
-  const { children } = useFamily()
+  const { members } = useFamily()
 
-  const nonParents = children // show all members including parents
-  const [selectedId, setSelectedId] = useState(nonParents[0]?.id ?? null)
+  const allMembers = members
+  const [selectedId, setSelectedId] = useState(allMembers[0]?.id ?? null)
   const [code,       setCode]       = useState(null)
   const [expiresAt,  setExpiresAt]  = useState(null)
   const [secsLeft,   setSecsLeft]   = useState(0)
@@ -52,7 +52,7 @@ export default function InviteCode() {
     }
   }
 
-  const selectedMember = nonParents.find(c => c.id === selectedId)
+  const selectedMember = allMembers.find(c => c.id === selectedId)
 
   const mm = String(Math.floor(secsLeft / 60)).padStart(2, '0')
   const ss = String(secsLeft % 60).padStart(2, '0')
@@ -83,16 +83,16 @@ export default function InviteCode() {
         </div>
 
         {/* Child selector */}
-        {nonParents.length === 0 ? (
+        {allMembers.length === 0 ? (
           <p className="text-sm font-mono text-center" style={{ color: 'var(--text-muted)' }}>
-            No children found. Add them in Family Members first.
+            No members found. Add them in Family Members first.
           </p>
         ) : (
           <>
             <div className="flex flex-col gap-2">
-              <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>FOR WHICH CHILD?</label>
+              <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>FOR WHICH MEMBER?</label>
               <div className="flex gap-2">
-                {nonParents.map(ch => (
+                {allMembers.map(ch => (
                   <button key={ch.id}
                     onClick={() => { setSelectedId(ch.id); setCode(null); setError(null) }}
                     className="flex-1 flex flex-col items-center py-3 px-2 rounded-xl transition-all active:scale-95"
