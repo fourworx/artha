@@ -2,13 +2,14 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { useState, useEffect } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { FamilyProvider, useFamily } from './context/FamilyContext'
-import { getPendingLogsForMembers, getPendingMemberRequests, getDeviceClaim, getOrCreateDeviceId } from './db/operations'
+import { getPendingLogsForMembers, getPendingMemberRequests, getDeviceClaim, getOrCreateDeviceId, checkFamilyExists } from './db/operations'
 import { supabase } from './db/supabase'
 import { FAMILY_ID } from './utils/constants'
 import ParentNav from './components/ParentNav'
 import ChildNav from './components/ChildNav'
 import InstallPrompt from './components/InstallPrompt'
 import JoinFamily from './views/auth/JoinFamily'
+import Onboarding from './views/onboarding/Onboarding'
 
 // Auth
 import PinAuth from './auth/PinAuth'
@@ -66,42 +67,68 @@ function saveClaim(setClaim) {
   }
 }
 
-// Runs before any routing. If this device has never been claimed,
-// show JoinFamily until the code is entered (or parent bypass used).
+// Runs before any routing. Routes to:
+//   'onboarding' → no family exists yet (brand new install)
+//   'join'       → family exists but this device is unclaimed
+//   'ready'      → device is claimed, proceed to app
 function DeviceGate({ children }) {
-  // Initialise synchronously from localStorage — no loading flash for returning devices
-  const [claim, setClaimRaw] = useState(() => readCachedClaim())
-  const setClaim = saveClaim(setClaimRaw)
+  const cached = readCachedClaim()
+  const [screen, setScreen] = useState(cached ? 'ready' : 'checking')
+  const [claim,  setClaim]  = useState(cached)
 
   useEffect(() => {
-    // If we already have a cached claim, verify it against Supabase in the background
-    // (in case it was revoked) but don't block rendering
-    if (readCachedClaim()) return
-
-    // New device — query Supabase
-    getDeviceClaim()
-      .then(c => { if (c) { setClaim(c) } else { setClaimRaw(null) } })
-      .catch(() => setClaimRaw(null))
+    if (cached) return // already ready, skip async check
+    Promise.all([getDeviceClaim(), checkFamilyExists()])
+      .then(([c, familyExists]) => {
+        if (c) {
+          writeCachedClaim(c)
+          setClaim(c)
+          setScreen('ready')
+        } else if (!familyExists) {
+          setScreen('onboarding')
+        } else {
+          setScreen('join')
+        }
+      })
+      .catch(() => setScreen('join'))
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // claim === null  →  unclaimed device, show join screen
-  // claim === obj   →  claimed, proceed
-  if (claim === null) {
-    const handleSkip = async () => {
-      const deviceId = getOrCreateDeviceId()
-      await supabase.from('device_claims').upsert({
-        device_id: deviceId,
-        family_id: FAMILY_ID,
-        member_id: null,
-        claimed_at: new Date().toISOString(),
-      })
-      setClaim({ deviceId, familyId: FAMILY_ID, memberId: null })
-    }
-    return <JoinFamily onClaimed={setClaim} onSkip={handleSkip} />
+  const handleClaimed = (c) => {
+    writeCachedClaim(c)
+    setClaim(c)
+    setScreen('ready')
   }
 
-  // claim is truthy — device is known (or localStorage was populated)
+  if (screen === 'checking') return (
+    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+      <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: 12, color: 'var(--text-muted)' }}>
+        Loading...
+      </span>
+    </div>
+  )
+
+  if (screen === 'onboarding') return (
+    <Onboarding
+      onComplete={handleClaimed}
+      onJoinInstead={() => setScreen('join')}
+    />
+  )
+
+  if (screen === 'join') return (
+    <JoinFamily
+      onClaimed={handleClaimed}
+      onSkip={async () => {
+        const deviceId = getOrCreateDeviceId()
+        await supabase.from('device_claims').upsert({
+          device_id: deviceId, family_id: FAMILY_ID,
+          member_id: null, claimed_at: new Date().toISOString(),
+        })
+        handleClaimed({ deviceId, familyId: FAMILY_ID, memberId: null })
+      }}
+    />
+  )
+
   return (
     <DeviceContext.Provider value={claim}>
       {children}

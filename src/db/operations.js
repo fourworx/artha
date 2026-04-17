@@ -1,5 +1,6 @@
 import { supabase } from './supabase'
 import { today } from '../utils/dates'
+import { DEFAULT_CONFIG, FAMILY_ID } from '../utils/constants'
 
 // ── Row mappers (DB snake_case → JS camelCase) ────────────────────────────────
 
@@ -1304,4 +1305,56 @@ export async function claimDevice(code) {
   }))
 
   return { familyId: row.family_id, memberId: row.member_id }
+}
+
+// ── Onboarding ────────────────────────────────────────────────────────────────
+
+/** Returns true if the family row already exists in Supabase. */
+export async function checkFamilyExists() {
+  const { count } = await supabase
+    .from('families')
+    .select('id', { count: 'exact', head: true })
+    .eq('id', FAMILY_ID)
+  return (count ?? 0) > 0
+}
+
+/**
+ * Create a brand-new family with the first parent member.
+ * Returns the new memberId so the device can be auto-claimed and auto-logged-in.
+ */
+export async function createFamily({ familyName, memberName, avatar, pinHash }) {
+  // Family row
+  throwIfError(await supabase.from('families').insert({
+    id:               FAMILY_ID,
+    name:             familyName,
+    config:           { ...DEFAULT_CONFIG },
+    tax_fund_balance: 0,
+    tax_fund_history: [],
+  }))
+
+  // First parent member
+  const memberId = crypto.randomUUID()
+  throwIfError(await supabase.from('members').insert({
+    id:           memberId,
+    family_id:    FAMILY_ID,
+    name:         memberName,
+    role:         'parent',
+    tier:         null,
+    pin:          pinHash,
+    avatar,
+    base_salary:  0,
+    accounts:     { spending: 0, savings: 0, philanthropy: 0, subGoals: [], loan: null },
+    credit_score: 500,
+  }))
+
+  // Auto-claim this device as the founding parent device
+  const deviceId = getOrCreateDeviceId()
+  await supabase.from('device_claims').upsert({
+    device_id:  deviceId,
+    family_id:  FAMILY_ID,
+    member_id:  memberId,
+    claimed_at: new Date().toISOString(),
+  })
+
+  return { memberId, deviceId }
 }
