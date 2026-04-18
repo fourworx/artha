@@ -23,8 +23,8 @@ export function getAvailableBonusChores(allChores, memberId) {
     if (chore.type !== 'bonus') return false
     const assigned = Array.isArray(chore.assignedTo) ? chore.assignedTo : []
     if (assigned.length > 0 && !assigned.includes(memberId)) return false
-    // 'once' = available any time until deactivated; other recurrences check today's schedule
-    return chore.recurrence === 'once' || isDueToday(chore.recurrence, chore.daysPerWeek)
+    // Bonus chores are always visible when active — recurrence controls earn frequency, not visibility
+    return true
   })
 }
 
