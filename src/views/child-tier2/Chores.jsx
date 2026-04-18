@@ -243,12 +243,16 @@ export default function Chores() {
             </div>
 
             {/* Bonus chores */}
-            {bonusChores.length > 0 && (
-              <div className="flex flex-col gap-2">
-                <p className="text-xs font-mono px-1" style={{ color: 'var(--text-muted)' }}>
-                  EARN MORE ⚡
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-mono px-1" style={{ color: 'var(--text-muted)' }}>
+                EARN MORE ⚡
+              </p>
+              {bonusChores.length === 0 ? (
+                <p className="text-xs font-mono text-center py-4" style={{ color: 'var(--text-dim)' }}>
+                  No bonus tasks available today
                 </p>
-                {bonusChores.map(chore => (
+              ) : (
+                bonusChores.map(chore => (
                   <BonusRow
                     key={chore.id}
                     chore={chore}
@@ -256,9 +260,9 @@ export default function Chores() {
                     onClaim={handleClaim}
                     claiming={claiming}
                   />
-                ))}
-              </div>
-            )}
+                ))
+              )}
+            </div>
           </>
         )}
       </div>

@@ -18,13 +18,14 @@ export function getDueChoresForMember(allChores, memberId) {
  * Empty assignedTo = open to all children.
  */
 export function getAvailableBonusChores(allChores, memberId) {
-  return allChores.filter(chore =>
-    chore.isActive &&
-    chore.type === 'bonus' &&
-    (chore.assignedTo.length === 0 || chore.assignedTo.includes(memberId)) &&
+  return allChores.filter(chore => {
+    if (!chore.isActive) return false
+    if (chore.type !== 'bonus') return false
+    const assigned = Array.isArray(chore.assignedTo) ? chore.assignedTo : []
+    if (assigned.length > 0 && !assigned.includes(memberId)) return false
     // 'once' = available any time until deactivated; other recurrences check today's schedule
-    (chore.recurrence === 'once' || isDueToday(chore.recurrence, chore.daysPerWeek))
-  )
+    return chore.recurrence === 'once' || isDueToday(chore.recurrence, chore.daysPerWeek)
+  })
 }
 
 /**

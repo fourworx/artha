@@ -45,7 +45,7 @@ function mapChore(row) {
     daysPerWeek:  row.days_per_week,
     value:        row.value,
     assignedTo:   row.assigned_to ?? [],
-    isActive:     row.is_active,
+    isActive:     row.is_active ?? true,
   }
 }
 
