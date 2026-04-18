@@ -22,7 +22,8 @@ export function getAvailableBonusChores(allChores, memberId) {
     chore.isActive &&
     chore.type === 'bonus' &&
     (chore.assignedTo.length === 0 || chore.assignedTo.includes(memberId)) &&
-    isDueToday(chore.recurrence, chore.daysPerWeek)
+    // 'once' = available any time until deactivated; other recurrences check today's schedule
+    (chore.recurrence === 'once' || isDueToday(chore.recurrence, chore.daysPerWeek))
   )
 }
 

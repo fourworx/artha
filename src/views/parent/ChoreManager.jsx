@@ -121,29 +121,13 @@ function EarningsSummary({ child, mandatoryChores, allBonusChores, payPeriod, fm
           </button>
         </div>
       ) : (
-        <div className="grid grid-cols-2 gap-2">
-          <div className="px-3 py-2 rounded-lg" style={{ background: 'var(--bg-raised)' }}>
-            <p style={{ fontFamily: 'monospace', fontSize: '10px', color: 'var(--text-dim)' }}>PER WEEK</p>
-            <p className="text-base font-mono font-bold mt-0.5" style={{ color: 'var(--positive)' }}>
-              {fmt(weeklySalary)}
-            </p>
-            {payPeriod === 'monthly' && (
-              <p style={{ fontFamily: 'monospace', fontSize: '9px', color: 'var(--text-dim)', marginTop: '2px' }}>
-                ≈ {fmt(baseSalary)}/mo ÷ 4.33
-              </p>
-            )}
-          </div>
-          <div className="px-3 py-2 rounded-lg" style={{ background: 'var(--bg-raised)' }}>
-            <p style={{ fontFamily: 'monospace', fontSize: '10px', color: 'var(--text-dim)' }}>PER MONTH</p>
-            <p className="text-base font-mono font-bold mt-0.5" style={{ color: 'var(--positive)' }}>
-              {fmt(monthlySalary)}
-            </p>
-            {payPeriod === 'weekly' && (
-              <p style={{ fontFamily: 'monospace', fontSize: '9px', color: 'var(--text-dim)', marginTop: '2px' }}>
-                ≈ {fmt(baseSalary)}/wk × 4.33
-              </p>
-            )}
-          </div>
+        <div className="px-3 py-2 rounded-lg" style={{ background: 'var(--bg-raised)' }}>
+          <p style={{ fontFamily: 'monospace', fontSize: '10px', color: 'var(--text-dim)' }}>
+            {payPeriod === 'monthly' ? 'PER MONTH' : 'PER WEEK'}
+          </p>
+          <p className="text-base font-mono font-bold mt-0.5" style={{ color: 'var(--positive)' }}>
+            {fmt(baseSalary)}
+          </p>
         </div>
       )}
 

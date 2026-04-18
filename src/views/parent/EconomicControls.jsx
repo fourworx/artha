@@ -4,22 +4,31 @@ import { useFamily, useCurrency } from '../../context/FamilyContext'
 import { updateFamilyConfig, updateMemberConfig } from '../../db/operations'
 import { FAMILY_ID, CURRENCIES } from '../../utils/constants'
 
-function SliderRow({ label, value, min, max, step, display, onChange }) {
+// isPercent: value stored as decimal (0.12), input shown as whole number (12)
+function InputRow({ label, value, display, onChange, isPercent, unit }) {
+  const inputVal = isPercent ? +(value * 100).toFixed(4) : value
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1.5">
       <div className="flex items-center justify-between">
         <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{label}</label>
         <span className="text-sm font-mono font-bold" style={{ color: 'var(--text-primary)' }}>
           {display(value)}
         </span>
       </div>
-      <input type="range" min={min} max={max} step={step} value={value}
-        onChange={e => onChange(Number(e.target.value))}
-        className="w-full h-1.5 rounded-full outline-none cursor-pointer"
-        style={{ accentColor: 'var(--accent-blue)' }}
-      />
-      <div className="flex justify-between text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
-        <span>{display(min)}</span><span>{display(max)}</span>
+      <div className="flex items-center gap-2">
+        <input
+          type="number" min={0} step={isPercent ? 0.1 : 1} value={inputVal}
+          onChange={e => {
+            const v = parseFloat(e.target.value)
+            if (isNaN(v) || v < 0) return
+            onChange(isPercent ? +(v / 100).toFixed(6) : v)
+          }}
+          className="flex-1 rounded-lg px-3 py-2 text-sm font-mono outline-none"
+          style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+        />
+        {unit && (
+          <span className="text-xs font-mono shrink-0" style={{ color: 'var(--text-muted)' }}>{unit}</span>
+        )}
       </div>
     </div>
   )
@@ -161,7 +170,7 @@ export default function EconomicControls() {
       currency,
       payPeriod,
       paydayDow,
-      paydayDom: Math.min(28, Math.max(1, paydayDom)),
+      paydayDom: Math.min(31, Math.max(1, paydayDom)),
       autoPayslip,
     }
 
@@ -193,15 +202,18 @@ export default function EconomicControls() {
     setTimeout(() => setSaved(false), 2000)
   }
 
-  const pct    = v => `${Math.round(v * 100)}%`
+  const pct    = v => `${+(v * 100).toFixed(2)}%`
   const curr   = CURRENCIES[currency] ?? CURRENCIES.INR
   const amtFmt = v => `${curr.symbol}${v}`
-  const gross  = 200
-  const tax    = Math.round(gross * taxRate)
-  const net    = Math.max(0, gross - tax - rentAmount - utilitiesAmount)
 
   const nonParentChildren = children.filter(ch => !ch.isParent)
   const selectedChild = nonParentChildren.find(ch => ch.id === selectedChildId)
+
+  // Example calculation uses the relevant child's actual salary
+  const exampleChild = sameForAll ? (nonParentChildren[0] ?? null) : selectedChild
+  const gross  = exampleChild?.baseSalary ?? 0
+  const tax    = Math.round(gross * taxRate)
+  const net    = Math.max(0, gross - tax - rentAmount - utilitiesAmount)
 
   // Check if selected child has any overrides vs family defaults
   const hasOverride = selectedChild?.config && Object.keys(selectedChild.config).length > 0
@@ -284,16 +296,16 @@ export default function EconomicControls() {
           {payPeriod === 'monthly' && (
             <div className="flex flex-col gap-1.5">
               <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-                PAYDAY (day of month, 1–28)
+                PAYDAY (day of month, 1–31)
               </label>
               <input
-                type="number" min={1} max={28} value={paydayDom}
-                onChange={e => setPaydayDom(Math.min(28, Math.max(1, Number(e.target.value) || 1)))}
+                type="number" min={1} max={31} value={paydayDom}
+                onChange={e => setPaydayDom(Math.min(31, Math.max(1, Number(e.target.value) || 1)))}
                 className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
                 style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
               />
               <p className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
-                Adjust child salaries to monthly amounts.
+                Days 29–31 fall on the last day of shorter months. Adjust child salaries to monthly amounts.
               </p>
             </div>
           )}
@@ -409,45 +421,45 @@ export default function EconomicControls() {
             </div>
           )}
 
-          {/* Economic sliders */}
+          {/* Economic inputs */}
           {(sameForAll || selectedChildId || !advancedMode) && (
             <div className="flex flex-col gap-5">
-              <SliderRow label="TAX RATE"
-                value={taxRate} min={0} max={0.30} step={0.01}
-                display={pct} onChange={setTaxRate}
+              <InputRow label="TAX RATE"
+                value={taxRate} display={pct} onChange={setTaxRate}
+                isPercent unit="%"
               />
 
-              <SliderRow label={`RENT PER ${payPeriod === 'monthly' ? 'MONTH' : 'WEEK'} (${curr.symbol})`}
-                value={rentAmount} min={0} max={payPeriod === 'monthly' ? 400 : 100} step={payPeriod === 'monthly' ? 10 : 5}
-                display={amtFmt} onChange={setRentAmount}
+              <InputRow label={`RENT PER ${payPeriod === 'monthly' ? 'MONTH' : 'WEEK'} (${curr.symbol})`}
+                value={rentAmount} display={amtFmt} onChange={setRentAmount}
+                unit={curr.symbol}
               />
 
-              <SliderRow label="AUTO-SAVE %"
-                value={autoSave} min={0} max={0.50} step={0.05}
-                display={pct} onChange={setAutoSave}
+              <InputRow label="AUTO-SAVE %"
+                value={autoSave} display={pct} onChange={setAutoSave}
+                isPercent unit="%"
               />
 
-              {/* Advanced-only sliders */}
+              {/* Advanced-only inputs */}
               {advancedMode && <>
                 <div className="flex flex-col gap-1.5">
-                  <SliderRow label={`RECURRING UTILITIES / ${payPeriod === 'monthly' ? 'MONTH' : 'WEEK'} (${curr.symbol})`}
-                    value={utilitiesAmount} min={0} max={payPeriod === 'monthly' ? 200 : 50} step={payPeriod === 'monthly' ? 10 : 5}
-                    display={amtFmt} onChange={setUtilitiesAmount}
+                  <InputRow label={`RECURRING UTILITIES / ${payPeriod === 'monthly' ? 'MONTH' : 'WEEK'} (${curr.symbol})`}
+                    value={utilitiesAmount} display={amtFmt} onChange={setUtilitiesAmount}
+                    unit={curr.symbol}
                   />
                   <p className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
                     Fixed charge every payslip (electricity, internet, etc.). Ad-hoc charges are added separately via Utilities.
                   </p>
                 </div>
 
-                <SliderRow label={`SAVINGS INTEREST / ${payPeriod === 'monthly' ? 'MONTH' : 'WEEK'}`}
-                  value={interestRate} min={0} max={0.10} step={0.005}
-                  display={pct} onChange={onSavingsRateChange}
+                <InputRow label={`SAVINGS INTEREST / ${payPeriod === 'monthly' ? 'MONTH' : 'WEEK'}`}
+                  value={interestRate} display={pct} onChange={onSavingsRateChange}
+                  isPercent unit="%"
                 />
 
                 <div className="flex flex-col gap-2">
-                  <SliderRow label={`LOAN INTEREST / ${payPeriod === 'monthly' ? 'MONTH' : 'WEEK'}`}
-                    value={loanInterestRate} min={interestRate} max={0.20} step={0.005}
-                    display={pct} onChange={onLoanRateChange}
+                  <InputRow label={`LOAN INTEREST / ${payPeriod === 'monthly' ? 'MONTH' : 'WEEK'}`}
+                    value={loanInterestRate} display={pct} onChange={onLoanRateChange}
+                    isPercent unit="%"
                   />
                   {loanInterestRate === interestRate && (
                     <p className="text-xs font-mono" style={{ color: 'var(--warning)' }}>
@@ -461,9 +473,9 @@ export default function EconomicControls() {
                   )}
                 </div>
 
-                <SliderRow label="PHILANTHROPY %"
-                  value={philanthropyPct} min={0} max={0.20} step={0.01}
-                  display={pct} onChange={setPhilanthropyPct}
+                <InputRow label="PHILANTHROPY %"
+                  value={philanthropyPct} display={pct} onChange={setPhilanthropyPct}
+                  isPercent unit="%"
                 />
               </>}
             </div>
@@ -475,7 +487,7 @@ export default function EconomicControls() {
           <div className="px-3 py-3 rounded-xl flex flex-col gap-2"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-              EXAMPLE: {curr.symbol}200 GROSS{!sameForAll && selectedChild ? ` · ${selectedChild.name}` : ''}
+              EXAMPLE: {exampleChild ? `${curr.symbol}${gross} GROSS · ${exampleChild.name}` : 'No children yet'}
             </p>
             {[
               ['Tax',             `−${curr.symbol}${tax}`],
