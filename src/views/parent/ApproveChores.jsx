@@ -71,7 +71,7 @@ export default function ApproveChores() {
         await approveTier1ChoreLog(log.id, log.memberId, coinAmount)
         await reload()
       } else if (chore?.type === 'bonus') {
-        await approveBonusChoreLog(log.id, log.memberId, log.choreId)
+        await approveBonusChoreLog(log.id)
         await reload()
       } else {
         await approveChoreLog(log.id)
@@ -206,7 +206,22 @@ export default function ApproveChores() {
         {/* ── Chore approvals ── */}
         {groupedChores.length > 0 && (
           <div className="flex flex-col gap-3">
-            <p className="text-xs font-mono px-1" style={{ color: 'var(--text-muted)' }}>CHORE COMPLETIONS</p>
+            <div className="flex items-center justify-between px-1">
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>CHORE COMPLETIONS</p>
+              {logs.length > 1 && (
+                <button
+                  disabled={!!acting}
+                  onClick={async () => {
+                    for (const log of [...logs]) {
+                      await approveChore(log)
+                    }
+                  }}
+                  className="text-xs font-mono px-2 py-1 rounded-lg transition-all active:scale-95"
+                  style={{ background: 'rgba(74,222,128,0.15)', color: 'var(--positive)', border: '1px solid rgba(74,222,128,0.25)' }}>
+                  Approve All ({logs.length})
+                </button>
+              )}
+            </div>
             {groupedChores.map(({ member, logs: memberLogs }) => (
               <div key={member.id} className="flex flex-col gap-2">
                 <div className="flex items-center gap-2 px-1">
@@ -232,7 +247,7 @@ export default function ApproveChores() {
                           {chore?.type === 'bonus' && (
                             <span className="text-xs font-mono px-1.5 py-0.5 rounded"
                               style={{ background: 'rgba(74,222,128,0.1)', color: 'var(--positive)', border: '1px solid rgba(74,222,128,0.25)' }}>
-                              ⚡ +{fmt(chore.value)} instant
+                              ⚡ +{fmt(chore.value)} on payslip
                             </span>
                           )}
                         </div>

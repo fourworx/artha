@@ -85,10 +85,20 @@ export function calculatePayslip({
   const streakBonusPct = streakDays >= 14 ? 0.15 : streakDays >= 7 ? 0.10 : streakDays >= 3 ? 0.05 : 0
   const streakBonus    = roundRupees(adjustedSalary * streakBonusPct)
 
-  // ── 3. Gross (bonus chores are credited immediately on approval, not via payslip)
+  // ── 3. Bonus chore earnings (approved during this period, paid out on settle) ─
+  // Bonus chores bypass tax/deductions — credited directly to spending on settle.
+  const bonusChoreMap = Object.fromEntries(
+    allChores.filter(c => c.type === 'bonus').map(c => [c.id, c])
+  )
+  const bonusChoreItems = choreLogs
+    .filter(l => l.status === 'approved' && bonusChoreMap[l.choreId])
+    .map(l => ({ logId: l.id, choreId: l.choreId, title: bonusChoreMap[l.choreId].title, value: bonusChoreMap[l.choreId].value }))
+  const bonusChoreEarnings = bonusChoreItems.reduce((s, b) => s + b.value, 0)
+
+  // ── 4. Gross (salary only — bonus chores go direct to spending, not taxed) ──
   const gross = adjustedSalary + streakBonus
 
-  // ── 4. Deductions ───────────────────────────────────────────────
+  // ── 5. Deductions ───────────────────────────────────────────────
   const tax                = roundRupees(gross * config.taxRate)
   const rent               = config.rentAmount
   const recurringUtilities = config.utilitiesAmount ?? 0
@@ -138,7 +148,8 @@ export function calculatePayslip({
 
   // ── 9. New balances ──────────────────────────────────────────────
   const newSavings      = member.accounts.savings + savingsAlloc + interestEarned
-  const newSpending     = member.accounts.spending + spendingAfterLoan
+  // Bonus chore earnings go directly to spending (not taxed or allocated)
+  const newSpending     = member.accounts.spending + spendingAfterLoan + bonusChoreEarnings
   const newPhilanthropy = philanthropyBalance + philanthropyAlloc   // no interest
 
   return {
@@ -149,6 +160,8 @@ export function calculatePayslip({
       streakDays,
       streakBonusPct,
       streakBonus,
+      bonusChoreEarnings,
+      bonusChoreItems,
     },
     deductions: {
       tax,
@@ -316,6 +329,11 @@ export async function settlePayslip(payslipId) {
       amount: ps.earnings.streakBonus,
       description: `Streak bonus (${ps.earnings.streakDays} days · +${Math.round(ps.earnings.streakBonusPct * 100)}%)`,
     },
+    ...(ps.earnings.bonusChoreItems ?? []).map(b => ({
+      type: 'bonus',
+      amount: b.value,
+      description: `Bonus chore: ${b.title}`,
+    })),
     ps.deductions.tax > 0 && {
       type: 'tax',
       amount: -ps.deductions.tax,

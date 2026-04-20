@@ -488,29 +488,9 @@ export async function approveTier1ChoreLog(logId, memberId, coinAmount) {
   await updateCreditScore(memberId, 2)
 }
 
-export async function approveBonusChoreLog(logId, memberId, choreId) {
-  const [choreResult, member] = await Promise.all([
-    supabase.from('chores').select('*').eq('id', choreId).single(),
-    getMember(memberId),
-  ])
-  if (choreResult.error) throw new Error('Chore not found')
-  if (!member) throw new Error('Member not found')
-  const chore = mapChore(choreResult.data)
-
+export async function approveBonusChoreLog(logId) {
+  // No immediate credit — bonus chore earnings are included in the next payslip
   await approveChoreLog(logId)
-  await updateMemberAccounts(memberId, {
-    ...member.accounts,
-    spending: member.accounts.spending + chore.value,
-  })
-  await addTransaction({
-    id: crypto.randomUUID(),
-    memberId,
-    type: 'bonus',
-    amount: chore.value,
-    description: `Bonus: ${chore.title}`,
-    date: today(),
-    relatedId: logId,
-  })
 }
 
 export async function approveRewardRequest(requestId, memberId, amount) {
