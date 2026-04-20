@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom'
 import { Play, AlertCircle, Plus, X, FileText, CheckCircle } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useFamily, useCurrency, usePeriod } from '../../context/FamilyContext'
-import { displayDate, today, currentPeriodEnd, currentPeriodStart } from '../../utils/dates'
+import { displayDate, today } from '../../utils/dates'
 import { runPayslip, settlePayslip } from '../../engine/payslip'
 import { getDueChoresForMember, buildLogMap } from '../../engine/chores'
 import { getChoreLogsForDate, getChoreLogsForPeriod, giveBonus, giveLoan, getPayslips, getPayslipForPeriod, getOverdueDrafts } from '../../db/operations'
@@ -484,7 +484,7 @@ export default function ParentDashboard() {
   const { family, children, chores, reload } = useFamily()
   const navigate = useNavigate()
   const fmt = useCurrency()
-  const { paydayToday: payday, periodEnd, label: periodLabel } = usePeriod()
+  const { paydayToday: payday, periodEnd, progressPeriodStart, progressPeriodEnd, label: periodLabel } = usePeriod()
 
   const [choreStats,     setChoreStats]     = useState({})
   const [periodStats,    setPeriodStats]    = useState({})
@@ -535,8 +535,8 @@ export default function ParentDashboard() {
   // numbers shown here match what drove the salary calculation.
   const loadPeriodStats = useCallback(async () => {
     if (!children.length || !chores.length || !family) return
-    const pStart = currentPeriodStart(family.config)
-    const pEnd   = currentPeriodEnd(family.config)
+    const pStart = progressPeriodStart
+    const pEnd   = progressPeriodEnd
 
     const stats = {}
     await Promise.all(children.map(async (child) => {
@@ -578,7 +578,7 @@ export default function ParentDashboard() {
       stats[child.id] = { approved: totalApproved, expected: totalExpected }
     }))
     setPeriodStats(stats)
-  }, [children, chores, family])
+  }, [children, chores, progressPeriodStart, progressPeriodEnd])
 
   useEffect(() => { loadPeriodStats() }, [loadPeriodStats])
 

@@ -3,7 +3,8 @@ import { getFamily, getMembers, getChores, getRewards } from '../db/operations'
 import { supabase } from '../db/supabase'
 import { FAMILY_ID, DEFAULT_CONFIG } from '../utils/constants'
 import { formatCurrency } from '../utils/currency'
-import { currentPeriodStart, currentPeriodEnd, isPayday, periodLabel } from '../utils/dates'
+import { currentPeriodStart, currentPeriodEnd, isPayday, periodLabel, today } from '../utils/dates'
+import { addDays, format } from 'date-fns'
 
 const FamilyContext = createContext(null)
 
@@ -100,11 +101,22 @@ export function useCurrency() {
 export function usePeriod() {
   const { family } = useFamily()
   const config = family?.config ?? DEFAULT_CONFIG
-  return useMemo(() => ({
-    periodStart:  currentPeriodStart(config),
-    periodEnd:    currentPeriodEnd(config),
-    paydayToday:  isPayday(config),
-    payPeriod:    config.payPeriod ?? 'weekly',
-    label:        periodLabel(config),   // 'week' | 'month'
-  }), [config])
+  return useMemo(() => {
+    const payday = isPayday(config)
+    const pEnd   = currentPeriodEnd(config)
+    const pStart = currentPeriodStart(config)
+    // On payday the payslip period is last cycle (ends yesterday).
+    // Progress bars should show the NEW cycle starting today.
+    const progStart = payday ? today() : pStart
+    const progEnd   = payday ? format(addDays(new Date(), 6), 'yyyy-MM-dd') : pEnd
+    return {
+      periodStart:         pStart,
+      periodEnd:           pEnd,
+      progressPeriodStart: progStart,
+      progressPeriodEnd:   progEnd,
+      paydayToday:         payday,
+      payPeriod:           config.payPeriod ?? 'weekly',
+      label:               periodLabel(config),
+    }
+  }, [config])
 }
