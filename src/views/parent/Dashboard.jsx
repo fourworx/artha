@@ -490,9 +490,9 @@ export default function ParentDashboard() {
   const [periodStats,    setPeriodStats]    = useState({})
   const [givingTo,       setGivingTo]       = useState(null)
   const [viewPayslipFor, setViewPayslipFor] = useState(null)
-  const [autoRanToday,   setAutoRanToday]   = useState(false)
-  const [allRan,         setAllRan]         = useState(false)
-  const [overdueDrafts,  setOverdueDrafts]  = useState([])
+  const [allRan,          setAllRan]          = useState(false)
+  const [currentDrafts,   setCurrentDrafts]   = useState([]) // drafts for this period
+  const [overdueDrafts,   setOverdueDrafts]   = useState([]) // drafts from past periods
   const autoRanRef = useRef(false)
 
   // Auto-payslip: run once on mount if enabled and it's payday
@@ -504,7 +504,7 @@ export default function ParentDashboard() {
       if (tier2.length === 0) return
       await Promise.allSettled(tier2.map(c => runPayslip(c.id)))
       await reload()
-      setAutoRanToday(true)
+      await refreshBanners()
     }
     autoRun()
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -586,13 +586,16 @@ export default function ParentDashboard() {
   const refreshBanners = useCallback(async () => {
     const tier2 = children.filter(c => c.tier >= 2)
     const tier2Ids = tier2.map(c => c.id)
-    if (!tier2Ids.length) { setOverdueDrafts([]); setAutoRanToday(false); setAllRan(false); return }
+    if (!tier2Ids.length) {
+      setOverdueDrafts([]); setCurrentDrafts([]); setAllRan(false); return
+    }
     const [drafts, payslipChecks] = await Promise.all([
       getOverdueDrafts(tier2Ids, periodEnd),
       Promise.all(tier2.map(c => getPayslipForPeriod(c.id, periodEnd))),
     ])
     setOverdueDrafts(drafts)
-    if (drafts.length === 0) setAutoRanToday(false)
+    const currentPs = payslipChecks.filter(Boolean)
+    setCurrentDrafts(currentPs.filter(p => p.status === 'draft'))
     setAllRan(payslipChecks.every(p => p !== null))
   }, [children, periodEnd])
 
@@ -615,8 +618,8 @@ export default function ParentDashboard() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
-        {/* Payday banner */}
-        {payday && !autoRanToday && !allRan && (
+        {/* Payday banner — run payslips */}
+        {payday && !allRan && (
           <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
             style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)' }}>
             <AlertCircle size={14} style={{ color: 'var(--positive)', flexShrink: 0 }} />
@@ -625,7 +628,8 @@ export default function ParentDashboard() {
             </p>
           </div>
         )}
-        {autoRanToday && (
+        {/* Drafted banner — settle payslips */}
+        {allRan && currentDrafts.length > 0 && (
           <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
             style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)' }}>
             <AlertCircle size={14} style={{ color: 'var(--positive)', flexShrink: 0 }} />
