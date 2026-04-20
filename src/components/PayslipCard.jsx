@@ -137,7 +137,7 @@ export default function PayslipCard({ payslip, member, familyName }) {
         {(earnings.bonusChoreItems ?? []).length > 0 && (
           <>
             <Divider char="·" />
-            <SectionLabel>BONUS CHORES (paid direct to spending)</SectionLabel>
+            <SectionLabel>BONUS CHORES (included in gross)</SectionLabel>
             {earnings.bonusChoreItems.map((b, i) => (
               <Row key={i} label={`⚡ ${b.title}`} value={fmt(b.value)} positive indent />
             ))}
@@ -189,9 +189,9 @@ export default function PayslipCard({ payslip, member, familyName }) {
       {/* Allocations */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <SectionLabel>ALLOCATIONS</SectionLabel>
-        <Row label={`→ Savings (${+((allocations.savings / (net || 1)) * 100).toFixed(2)}%)`} value={fmt(allocations.savings)} positive={allocations.savings > 0} />
+        <Row label={`→ Savings (${+((allocations.savingsRate ?? allocations.savings / (net || 1)) * 100).toFixed(2)}%)`} value={fmt(allocations.savings)} positive={allocations.savings > 0} />
         {allocations.philanthropy > 0 && (
-          <Row label={`→ Philanthropy (${+((allocations.philanthropy / (net || 1)) * 100).toFixed(2)}%)`} value={fmt(allocations.philanthropy)} positive />
+          <Row label={`→ Philanthropy (${+((allocations.philanthropyRate ?? allocations.philanthropy / (net || 1)) * 100).toFixed(2)}%)`} value={fmt(allocations.philanthropy)} positive />
         )}
         <Row label="→ Spending Wallet" value={fmt(allocations.spending)} positive={allocations.spending > 0} />
         <Row label="+ Interest on savings" value={fmt(interestEarned ?? 0)} positive={interestEarned > 0} dim={!interestEarned} />

@@ -95,8 +95,8 @@ export function calculatePayslip({
     .map(l => ({ logId: l.id, choreId: l.choreId, title: bonusChoreMap[l.choreId].title, value: bonusChoreMap[l.choreId].value }))
   const bonusChoreEarnings = bonusChoreItems.reduce((s, b) => s + b.value, 0)
 
-  // ── 4. Gross (salary only — bonus chores go direct to spending, not taxed) ──
-  const gross = adjustedSalary + streakBonus
+  // ── 4. Gross (salary + streak bonus + bonus chore earnings, all taxed) ──
+  const gross = adjustedSalary + streakBonus + bonusChoreEarnings
 
   // ── 5. Deductions ───────────────────────────────────────────────
   const tax                = roundRupees(gross * config.taxRate)
@@ -151,8 +151,7 @@ export function calculatePayslip({
 
   // ── 9. New balances ──────────────────────────────────────────────
   const newSavings      = member.accounts.savings + savingsAlloc + interestEarned
-  // Bonus chore earnings go directly to spending (not taxed or allocated)
-  const newSpending     = member.accounts.spending + spendingAfterLoan + bonusChoreEarnings
+  const newSpending     = member.accounts.spending + spendingAfterLoan
   const newPhilanthropy = philanthropyBalance + philanthropyAlloc   // no interest
 
   return {
@@ -182,9 +181,11 @@ export function calculatePayslip({
     totalDeductions,
     net,
     allocations: {
-      savings:      savingsAlloc,
-      philanthropy: philanthropyAlloc,
-      spending:     spendingAfterLoan,
+      savings:          savingsAlloc,
+      savingsRate:      config.autoSavePercent,
+      philanthropy:     philanthropyAlloc,
+      philanthropyRate: config.philanthropyPercent ?? 0,
+      spending:         spendingAfterLoan,
     },
     interestEarned,
     subGoalInterestEarned,
