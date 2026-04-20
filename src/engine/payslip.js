@@ -145,6 +145,9 @@ export function calculatePayslip({
     ...sg,
     balance: roundRupees(sg.balance + calculateWeeklyInterest(sg.balance, config.interestRate)),
   }))
+  const subGoalInterestEarned = subGoalsAfter.reduce((sum, sg, i) =>
+    sum + sg.balance - subGoals[i].balance, 0
+  )
 
   // ── 9. New balances ──────────────────────────────────────────────
   const newSavings      = member.accounts.savings + savingsAlloc + interestEarned
@@ -182,6 +185,7 @@ export function calculatePayslip({
       spending:     spendingAfterLoan,
     },
     interestEarned,
+    subGoalInterestEarned,
     philanthropyInterestEarned: 0,
     loanOutstandingAfter: newLoanOutstanding,
     balancesAfter: {

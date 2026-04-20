@@ -89,7 +89,7 @@ export default function PayslipCard({ payslip, member, familyName }) {
     return (n < 0 ? '−' : '') + fmtCurr(Math.abs(n), { forceDecimals: true })
   }
   if (!payslip) return null
-  const { earnings, deductions, gross, totalDeductions, net, allocations, interestEarned } = payslip
+  const { earnings, deductions, gross, totalDeductions, net, allocations, interestEarned, subGoalInterestEarned } = payslip
 
   return (
     <div style={{
@@ -132,14 +132,17 @@ export default function PayslipCard({ payslip, member, familyName }) {
             label={`🔥 Streak bonus (${earnings.streakDays}d · +${Math.round(earnings.streakBonusPct * 100)}%)`}
             value={fmt(earnings.streakBonus)} positive indent />
         )}
-        {earnings.bonusItems?.map((b, i) => (
-          <Row key={i} label={`+ ${b.title}`} value={fmt(b.total)} positive indent />
-        ))}
-        {earnings.totalBonus > 0 && (
-          <Row label="Total Bonus" value={fmt(earnings.totalBonus)} positive />
-        )}
         <Divider char="·" />
         <Row label="GROSS" value={fmt(gross)} bold positive={gross > 0} />
+        {(earnings.bonusChoreItems ?? []).length > 0 && (
+          <>
+            <Divider char="·" />
+            <SectionLabel>BONUS CHORES (paid direct to spending)</SectionLabel>
+            {earnings.bonusChoreItems.map((b, i) => (
+              <Row key={i} label={`⚡ ${b.title}`} value={fmt(b.value)} positive indent />
+            ))}
+          </>
+        )}
       </div>
 
       <Divider />
@@ -155,9 +158,6 @@ export default function PayslipCard({ payslip, member, familyName }) {
         {deductions.utilities?.map((u, i) => (
           <Row key={i} label={u.reason} value={fmt(-u.amount)} negative indent />
         ))}
-        {deductions.loanInterest > 0 && (
-          <Row label="Loan Interest (→ balance)" value={`+${fmt(deductions.loanInterest)}`} dim indent />
-        )}
         {deductions.loanRepayment > 0 && (
           <Row label="Loan Repayment" value={fmt(-deductions.loanRepayment)} negative />
         )}
@@ -196,6 +196,12 @@ export default function PayslipCard({ payslip, member, familyName }) {
         <Row label="→ Spending Wallet" value={fmt(allocations.spending)} positive={allocations.spending > 0} />
         {interestEarned > 0 && (
           <Row label="+ Interest on savings" value={fmt(interestEarned)} positive />
+        )}
+        {(subGoalInterestEarned ?? 0) > 0 && (
+          <Row label="+ Interest on goals" value={fmt(subGoalInterestEarned)} positive />
+        )}
+        {deductions.loanInterest > 0 && (
+          <Row label="− Loan interest accrued" value={fmt(-deductions.loanInterest)} negative dim />
         )}
       </div>
 
