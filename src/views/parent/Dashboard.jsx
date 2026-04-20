@@ -491,6 +491,7 @@ export default function ParentDashboard() {
   const [givingTo,       setGivingTo]       = useState(null)
   const [viewPayslipFor, setViewPayslipFor] = useState(null)
   const [autoRanToday,   setAutoRanToday]   = useState(false)
+  const [allRan,         setAllRan]         = useState(false)
   const [overdueDrafts,  setOverdueDrafts]  = useState([])
   const autoRanRef = useRef(false)
 
@@ -586,11 +587,16 @@ export default function ParentDashboard() {
 
   // Check for draft payslips whose period has ended
   const refreshBanners = useCallback(async () => {
-    const tier2Ids = children.filter(c => c.tier >= 2).map(c => c.id)
-    if (!tier2Ids.length) { setOverdueDrafts([]); setAutoRanToday(false); return }
-    const drafts = await getOverdueDrafts(tier2Ids, periodEnd)
+    const tier2 = children.filter(c => c.tier >= 2)
+    const tier2Ids = tier2.map(c => c.id)
+    if (!tier2Ids.length) { setOverdueDrafts([]); setAutoRanToday(false); setAllRan(false); return }
+    const [drafts, payslipChecks] = await Promise.all([
+      getOverdueDrafts(tier2Ids, periodEnd),
+      Promise.all(tier2.map(c => getPayslipForPeriod(c.id, periodEnd))),
+    ])
     setOverdueDrafts(drafts)
     if (drafts.length === 0) setAutoRanToday(false)
+    setAllRan(payslipChecks.every(p => p !== null))
   }, [children, periodEnd])
 
   useEffect(() => { refreshBanners() }, [refreshBanners])
@@ -613,7 +619,7 @@ export default function ParentDashboard() {
 
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
         {/* Payday banner */}
-        {payday && !autoRanToday && (
+        {payday && !autoRanToday && !allRan && (
           <div className="flex items-center gap-2 px-3 py-2.5 rounded-xl"
             style={{ background: 'rgba(74,222,128,0.08)', border: '1px solid rgba(74,222,128,0.2)' }}>
             <AlertCircle size={14} style={{ color: 'var(--positive)', flexShrink: 0 }} />
