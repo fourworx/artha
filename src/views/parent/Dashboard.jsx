@@ -733,7 +733,7 @@ export default function ParentDashboard() {
                 <ChoreBar
                   done={periodStats[child.id].approved}
                   total={periodStats[child.id].expected}
-                  label={`this ${periodLabel}`}
+                  label="this period"
                 />
               )}
 
