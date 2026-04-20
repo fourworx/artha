@@ -166,7 +166,7 @@ function ChildExpenseCard({ child, collected, unsettled, history, onSettle, fmt 
               </p>
               {uns > 0 && (
                 <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--warning)' }}>
-                  {fmt(uns)} due
+                  {fmt(uns)} to set aside
                 </p>
               )}
             </div>
