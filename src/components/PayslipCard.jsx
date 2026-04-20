@@ -132,17 +132,16 @@ export default function PayslipCard({ payslip, member, familyName }) {
             label={`🔥 Streak bonus (${earnings.streakDays}d · +${+(earnings.streakBonusPct * 100).toFixed(2)}%)`}
             value={fmt(earnings.streakBonus)} positive indent />
         )}
-        <Divider char="·" />
-        <Row label="GROSS" value={fmt(gross)} bold positive={gross > 0} />
         {(earnings.bonusChoreItems ?? []).length > 0 && (
           <>
-            <Divider char="·" />
-            <SectionLabel>BONUS CHORES (included in gross)</SectionLabel>
+            <SectionLabel>BONUS CHORES</SectionLabel>
             {earnings.bonusChoreItems.map((b, i) => (
               <Row key={i} label={`⚡ ${b.title}`} value={fmt(b.value)} positive indent />
             ))}
           </>
         )}
+        <Divider char="·" />
+        <Row label="GROSS" value={fmt(gross)} bold positive={gross > 0} />
       </div>
 
       <Divider />
