@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useFamily, useCurrency, usePeriod } from '../../context/FamilyContext'
 import { displayDate, today } from '../../utils/dates'
 import { calculatePayslip } from '../../engine/payslip'
-import { getChoreLogsForPeriod, getChores, getUtilityCharges, makeEarlyRepayment, getLatestPayslip, markCreditPopupSeen, getPayslips } from '../../db/operations'
+import { getChoreLogsForPeriod, getChores, getUtilityCharges, makeEarlyRepayment, getLatestPayslip, markCreditPopupSeen, getPayslips, addMemberRequest, getTransactions } from '../../db/operations'
 import { calculateStreak } from '../../engine/chores'
 import { FAMILY_ID } from '../../utils/constants'
 import { daysAgo } from '../../utils/dates'
@@ -192,6 +192,189 @@ function PrepaySheet({ loan, spending, memberId, onDone, onClose, fmt }) {
   )
 }
 
+// ── Donate sheet (request donation from philanthropy balance) ─────────────────
+function DonateSheet({ philanthropy, memberId, onClose, fmt }) {
+  const [charity, setCharity] = useState('')
+  const [amount,  setAmount]  = useState('')
+  const [saving,  setSaving]  = useState(false)
+  const [done,    setDone]    = useState(false)
+  const [error,   setError]   = useState('')
+
+  const max    = philanthropy
+  const parsed = Math.min(Number(amount) || 0, max)
+
+  const handleSubmit = async () => {
+    if (!charity.trim())        { setError('Enter a charity name'); return }
+    if (!parsed || parsed <= 0) { setError('Enter a valid amount'); return }
+    setSaving(true); setError('')
+    try {
+      await addMemberRequest({
+        id: crypto.randomUUID(),
+        familyId: FAMILY_ID,
+        memberId,
+        type: 'donation',
+        amount: parsed,
+        description: `Donate to ${charity.trim()}`,
+        metadata: { charityName: charity.trim() },
+        requestedAt: Date.now(),
+      })
+      setDone(true)
+    } catch (e) { setError(e.message) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end"
+      style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="rounded-t-2xl flex flex-col"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full" style={{ background: 'var(--border-bright)' }} />
+        </div>
+        <div className="flex items-center justify-between px-4 py-3"
+          style={{ borderBottom: '1px solid var(--border)' }}>
+          <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Request Donation
+          </span>
+          <button onClick={onClose} style={{ color: 'var(--text-muted)', background: 'none', border: 'none' }}>
+            <X size={18} />
+          </button>
+        </div>
+        {done ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-3 px-4">
+            <span className="text-5xl">🙏</span>
+            <p className="text-sm font-mono font-semibold" style={{ color: 'var(--positive)' }}>Request sent to parent!</p>
+            <p className="text-xs font-mono text-center" style={{ color: 'var(--text-muted)' }}>
+              Your parent will approve the donation.
+            </p>
+            <button onClick={onClose}
+              className="w-full py-3 rounded-xl text-sm font-mono font-semibold mt-2"
+              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+              Close
+            </button>
+          </div>
+        ) : (
+          <div className="px-4 py-4 flex flex-col gap-4">
+            <div className="p-2.5 rounded-lg" style={{ background: 'var(--bg-raised)' }}>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>PHILANTHROPY BALANCE</p>
+              <p className="text-base font-mono font-bold mt-0.5" style={{ color: 'var(--positive)' }}>{fmt(max)}</p>
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>CHARITY NAME</label>
+              <input value={charity} onChange={e => setCharity(e.target.value)}
+                placeholder="e.g. Local animal shelter"
+                className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+              />
+            </div>
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>AMOUNT</label>
+              <div className="flex gap-2 mb-1">
+                {[25, 50, 100].filter(v => v <= max).map(v => (
+                  <button key={v} onClick={() => setAmount(String(v))}
+                    className="flex-1 py-2 rounded-lg text-xs font-mono font-semibold transition-all"
+                    style={{
+                      background: amount === String(v) ? 'rgba(74,222,128,0.15)' : 'var(--bg-raised)',
+                      border: `1px solid ${amount === String(v) ? 'rgba(74,222,128,0.3)' : 'var(--border)'}`,
+                      color: amount === String(v) ? 'var(--positive)' : 'var(--text-muted)',
+                    }}>{fmt(v)}</button>
+                ))}
+              </div>
+              <input type="number" min={1} max={max} value={amount}
+                onChange={e => setAmount(e.target.value)}
+                placeholder="Custom amount"
+                className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+              />
+            </div>
+            {error && <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{error}</p>}
+            <button onClick={handleSubmit} disabled={saving || !parsed || !charity.trim()}
+              className="w-full py-3 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
+              style={{
+                background: saving || !parsed ? 'var(--border)' : 'rgba(74,222,128,0.15)',
+                border: '1px solid rgba(74,222,128,0.3)',
+                color: saving || !parsed ? 'var(--text-dim)' : 'var(--positive)',
+              }}>
+              {saving ? 'Sending...' : `Request ${parsed ? fmt(parsed) : '—'} donation`}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
+// ── Spending history sheet ─────────────────────────────────────────────────────
+const SPENDING_TYPE_META = {
+  reward:     { label: 'Reward store',   emoji: '🛍' },
+  withdrawal: { label: 'Withdrawal',     emoji: '💸' },
+  transfer:   { label: 'Transfer',       emoji: '↗' },
+}
+const SPENDING_TYPES = new Set(['reward', 'withdrawal', 'transfer'])
+
+function SpendingSheet({ memberId, onClose, fmt }) {
+  const [txs,     setTxs]     = useState(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    getTransactions(memberId, 60).then(all => {
+      setTxs(all.filter(t => SPENDING_TYPES.has(t.type)))
+      setLoading(false)
+    }).catch(() => setLoading(false))
+  }, [memberId])
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end"
+      style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="rounded-t-2xl flex flex-col"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', maxHeight: '75vh' }}>
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
+          <div className="w-10 h-1 rounded-full" style={{ background: 'var(--border-bright)' }} />
+        </div>
+        <div className="flex items-center justify-between px-4 py-3 shrink-0"
+          style={{ borderBottom: '1px solid var(--border)' }}>
+          <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Spending History
+          </span>
+          <button onClick={onClose} style={{ color: 'var(--text-muted)', background: 'none', border: 'none' }}>
+            <X size={18} />
+          </button>
+        </div>
+        <div className="overflow-y-auto px-4 py-3 flex flex-col gap-2">
+          {loading && (
+            <p className="text-xs font-mono text-center py-6" style={{ color: 'var(--text-dim)' }}>Loading...</p>
+          )}
+          {!loading && (!txs || txs.length === 0) && (
+            <p className="text-xs font-mono text-center py-6" style={{ color: 'var(--text-dim)' }}>
+              No spending yet — rewards and transfers will appear here
+            </p>
+          )}
+          {(txs ?? []).map(tx => {
+            const meta = SPENDING_TYPE_META[tx.type] ?? { label: tx.type, emoji: '•' }
+            return (
+              <div key={tx.id} className="flex items-center gap-3 px-3 py-2.5 rounded-xl"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
+                <span style={{ fontSize: 18 }}>{meta.emoji}</span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-xs font-mono font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
+                    {tx.description || meta.label}
+                  </p>
+                  <p className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>{tx.date}</p>
+                </div>
+                <span className="text-xs font-mono font-semibold" style={{ color: 'var(--negative)' }}>
+                  −{fmt(Math.abs(tx.amount))}
+                </span>
+              </div>
+            )
+          })}
+        </div>
+      </div>
+    </div>
+  )
+}
+
 export default function Tier2Home() {
   const { currentMember, refreshMember } = useAuth()
   const { family } = useFamily()
@@ -202,6 +385,8 @@ export default function Tier2Home() {
   const [projected,       setProjected]       = useState(null)
   const [streak,          setStreak]          = useState(0)
   const [showPrepay,      setShowPrepay]      = useState(false)
+  const [showDonate,      setShowDonate]      = useState(false)
+  const [showSpending,    setShowSpending]    = useState(false)
   const [creditPopup,     setCreditPopup]     = useState(null) // { score, prevScore }
   const [latestPayslip,   setLatestPayslip]   = useState(null)
   const [payslips,        setPayslips]        = useState([])
@@ -440,7 +625,7 @@ export default function Tier2Home() {
           </button>
 
           {/* Spent card */}
-          <button onClick={() => navigate('/child/ledger')}
+          <button onClick={() => setShowSpending(true)}
             className="p-4 rounded-xl text-left transition-all active:scale-95 flex flex-col"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SPENT</p>
@@ -456,6 +641,9 @@ export default function Tier2Home() {
             <div className="mt-2 -mx-1">
               <Sparkline data={spentHistory} color="#f87171" />
             </div>
+            <p className="text-xs font-mono mt-1 flex items-center gap-0.5" style={{ color: 'var(--text-dim)' }}>
+              View spending <ChevronRight size={11} />
+            </p>
           </button>
         </div>
 
@@ -476,8 +664,8 @@ export default function Tier2Home() {
             </div>
           </button>
 
-          <div
-            className="p-4 rounded-xl text-left flex flex-col"
+          <button onClick={() => setShowDonate(true)}
+            className="p-4 rounded-xl text-left transition-all active:scale-95 flex flex-col"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>PHILANTHROPY</p>
             <p className="text-2xl font-mono font-bold mt-1" style={{ color: 'var(--positive)' }}>
@@ -489,7 +677,10 @@ export default function Tier2Home() {
             <div className="mt-2 -mx-1">
               <Sparkline data={cumulativeDonations} color="#4ade80" />
             </div>
-          </div>
+            <p className="text-xs font-mono mt-1 flex items-center gap-0.5" style={{ color: 'var(--text-dim)' }}>
+              Donate <ChevronRight size={11} />
+            </p>
+          </button>
         </div>
 
         {/* Outstanding loan chip — tap to prepay */}
@@ -602,6 +793,23 @@ export default function Tier2Home() {
           </button>
         ))}
       </div>
+
+      {showDonate && (
+        <DonateSheet
+          philanthropy={philanthropy}
+          memberId={currentMember.id}
+          fmt={fmt}
+          onClose={() => setShowDonate(false)}
+        />
+      )}
+
+      {showSpending && (
+        <SpendingSheet
+          memberId={currentMember.id}
+          fmt={fmt}
+          onClose={() => setShowSpending(false)}
+        />
+      )}
 
       {showPrepay && accounts.loan && (
         <PrepaySheet
