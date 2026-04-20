@@ -164,11 +164,6 @@ function ChildExpenseCard({ child, collected, unsettled, history, onSettle, fmt 
               <p className="text-sm font-mono font-bold mt-0.5" style={{ color: 'var(--text-primary)' }}>
                 {fmt(col)}
               </p>
-              {uns > 0 && (
-                <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--warning)' }}>
-                  {fmt(uns)} to set aside
-                </p>
-              )}
             </div>
           ))}
         </div>
