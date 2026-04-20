@@ -538,6 +538,16 @@ export default function ParentDashboard() {
     const pStart = progressPeriodStart
     const pEnd   = progressPeriodEnd
 
+    // All calendar days in the period — denominator shows full workload,
+    // not just days the child has logged (that logic is for the payslip engine).
+    const allDates = []
+    let cur = new Date(pStart + 'T12:00:00')
+    const end = new Date(pEnd + 'T12:00:00')
+    while (cur <= end) {
+      allDates.push(cur.toISOString().slice(0, 10))
+      cur = new Date(cur.getTime() + 86400000)
+    }
+
     const stats = {}
     await Promise.all(children.map(async (child) => {
       const mandatory = chores.filter(c =>
@@ -546,14 +556,11 @@ export default function ParentDashboard() {
       if (!mandatory.length) { stats[child.id] = { approved: 0, expected: 0 }; return }
       const logs = await getChoreLogsForPeriod(child.id, pStart, pEnd)
 
-      // Same as calculatePayslip: only evaluate days with any log entry
-      const activeDates = [...new Set(logs.map(l => l.date))]
-
       let totalExpected = 0
       let totalApproved = 0
       for (const chore of mandatory) {
         let exp = 0, app = 0
-        for (const date of activeDates) {
+        for (const date of allDates) {
           const day = new Date(date + 'T12:00:00').getDay()
           let due = false
           switch (chore.recurrence) {
