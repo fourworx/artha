@@ -15,20 +15,26 @@ export function today() {
 }
 
 /** Returns the end of the current pay period.
- *  Weekly: next occurrence of paydayDow (including today if today is payday).
- *  Monthly: last day of current month (paydayDom controls when the payslip *runs*). */
+ *  Weekly: the day BEFORE the next payday (payday itself is day 1 of the new period).
+ *    e.g. payday=Monday → period ends Sunday; Monday's chores belong to next period.
+ *    When today IS payday: periodEnd = yesterday.
+ *    When today is any other day: periodEnd = (next payday) − 1.
+ *  Monthly: last day of current month. */
 export function currentPeriodEnd(config = null) {
   const now = new Date()
   if (config?.payPeriod === 'monthly') {
     return format(endOfMonth(now), 'yyyy-MM-dd')
   }
-  const paydayDow  = config?.paydayDow ?? 6 // default Saturday
-  const daysUntil  = (paydayDow - getDay(now) + 7) % 7
-  return format(addDays(now, daysUntil), 'yyyy-MM-dd')
+  const paydayDow   = config?.paydayDow ?? 6
+  const daysUntil   = (paydayDow - getDay(now) + 7) % 7
+  // daysUntil === 0 means today is payday → end is yesterday (−1)
+  // otherwise end is (daysUntil − 1) days from now (day before next payday)
+  const daysToEnd   = daysUntil === 0 ? -1 : daysUntil - 1
+  return format(addDays(now, daysToEnd), 'yyyy-MM-dd')
 }
 
 /** Returns the start of the current pay period.
- *  Weekly: periodEnd − 6 days.
+ *  Weekly: periodEnd − 6 days (7-day period ending the day before payday).
  *  Monthly: first day of current month. */
 export function currentPeriodStart(config = null) {
   if (config?.payPeriod === 'monthly') {
