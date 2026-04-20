@@ -585,11 +585,15 @@ export default function ParentDashboard() {
   useEffect(() => { loadPeriodStats() }, [loadPeriodStats])
 
   // Check for draft payslips whose period has ended
-  useEffect(() => {
+  const refreshBanners = useCallback(async () => {
     const tier2Ids = children.filter(c => c.tier >= 2).map(c => c.id)
-    if (!tier2Ids.length) return
-    getOverdueDrafts(tier2Ids, periodEnd).then(setOverdueDrafts)
-  }, [children])
+    if (!tier2Ids.length) { setOverdueDrafts([]); setAutoRanToday(false); return }
+    const drafts = await getOverdueDrafts(tier2Ids, periodEnd)
+    setOverdueDrafts(drafts)
+    if (drafts.length === 0) setAutoRanToday(false)
+  }, [children, periodEnd])
+
+  useEffect(() => { refreshBanners() }, [refreshBanners])
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -692,7 +696,7 @@ export default function ParentDashboard() {
               {/* Actions row */}
               {child.tier >= 2 && (
                 <div className="flex items-center gap-2 mb-3" onClick={e => e.stopPropagation()}>
-                  <RunPayslipButton child={child} periodEnd={periodEnd} onDone={reload} />
+                  <RunPayslipButton child={child} periodEnd={periodEnd} onDone={async () => { await reload(); await refreshBanners() }} />
                   <button
                     onClick={() => setViewPayslipFor(child)}
                     className="p-1.5 rounded-lg transition-all active:scale-95"
