@@ -1,8 +1,8 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { FamilyProvider, useFamily } from './context/FamilyContext'
-import { getPendingLogsForMembers, getPendingMemberRequests, getDeviceClaim, getOrCreateDeviceId, checkFamilyExists } from './db/operations'
+import { getPendingLogsForMembers, getPendingMemberRequests, getDeviceClaim, getOrCreateDeviceId, checkFamilyExists, getLatestPayslip } from './db/operations'
 import { supabase } from './db/supabase'
 import { FAMILY_ID } from './utils/constants'
 import ParentNav from './components/ParentNav'
@@ -177,6 +177,16 @@ function ParentShell() {
 // ── Tier 2 child shell ────────────────────────────────────────────────────────
 function Tier2Shell() {
   const { currentMember } = useAuth()
+  const [hasDraftPayslip, setHasDraftPayslip] = useState(false)
+
+  const checkDraft = useCallback(async () => {
+    if (!currentMember) return
+    const ps = await getLatestPayslip(currentMember.id).catch(() => null)
+    setHasDraftPayslip(ps?.status === 'draft')
+  }, [currentMember?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => { checkDraft() }, [checkDraft])
+
   if (!currentMember || currentMember.role !== 'child' || currentMember.tier < 2) {
     return <Navigate to="/" replace />
   }
@@ -185,7 +195,7 @@ function Tier2Shell() {
       <div style={{ flex: '1 1 0', minHeight: 0, overflow: 'hidden' }}>
         <Outlet />
       </div>
-      <ChildNav />
+      <ChildNav hasDraftPayslip={hasDraftPayslip} />
     </div>
   )
 }

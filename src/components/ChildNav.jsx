@@ -5,11 +5,11 @@ import { useAuth } from '../context/AuthContext'
 const items = [
   { to: '/child/home',   label: 'Home',    Icon: Home,        end: true },
   { to: '/child/chores', label: 'Chores',  Icon: CheckSquare },
-  { to: '/child/ledger', label: 'Ledger',  Icon: FileText },
+  { to: '/child/ledger', label: 'Ledger',  Icon: FileText,    badgeKey: 'ledger' },
   { to: '/child/goal',   label: 'Goals',   Icon: Heart },
 ]
 
-export default function ChildNav() {
+export default function ChildNav({ hasDraftPayslip }) {
   const { logout } = useAuth()
   const navigate   = useNavigate()
 
@@ -26,7 +26,9 @@ export default function ChildNav() {
         background: 'var(--bg-surface)',
       }}
     >
-      {items.map(({ to, label, Icon, end }) => (
+      {items.map(({ to, label, Icon, end, badgeKey }) => {
+        const showDot = badgeKey === 'ledger' && hasDraftPayslip
+        return (
         <NavLink
           key={to}
           to={to}
@@ -36,10 +38,20 @@ export default function ChildNav() {
             color: isActive ? 'var(--text-primary)' : 'var(--text-muted)',
           })}
         >
-          <Icon size={20} />
+          <div style={{ position: 'relative', display: 'inline-flex' }}>
+            <Icon size={20} />
+            {showDot && (
+              <span style={{
+                position: 'absolute', top: -3, right: -5,
+                width: 8, height: 8, borderRadius: '50%',
+                background: 'var(--warning)', border: '1.5px solid var(--bg-surface)',
+              }} />
+            )}
+          </div>
           <span className="text-xs font-mono">{label}</span>
         </NavLink>
-      ))}
+        )
+      })}
       <button
         onClick={handleLogout}
         className="flex-1 flex flex-col items-center justify-center py-2 gap-1"

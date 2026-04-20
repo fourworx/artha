@@ -395,6 +395,25 @@ export default function Tier2Home() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+        {/* Draft payslip banner */}
+        {latestPayslip?.status === 'draft' && (
+          <button
+            onClick={() => navigate('/child/ledger')}
+            className="w-full flex items-center gap-3 px-4 py-3 rounded-xl text-left transition-all active:scale-95"
+            style={{ background: 'rgba(251,191,36,0.1)', border: '1px solid rgba(251,191,36,0.35)' }}>
+            <span style={{ fontSize: 20 }}>📋</span>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs font-mono font-semibold" style={{ color: 'var(--warning)' }}>
+                New payslip ready
+              </p>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                Waiting for parent to approve · tap to view
+              </p>
+            </div>
+            <span className="text-xs font-mono" style={{ color: 'var(--warning)' }}>→</span>
+          </button>
+        )}
+
         {/* Hero row: Wallet + Spent */}
         <div className="grid grid-cols-2 gap-3">
           {/* Wallet card */}
