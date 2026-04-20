@@ -530,20 +530,13 @@ export default function ParentDashboard() {
 
   useEffect(() => { loadChoreStats() }, [loadChoreStats])
 
-  // Period-wide mandatory chore completion
+  // Period-wide mandatory chore completion — mirrors payslip engine logic exactly:
+  // only counts days the child actually logged something (activeDates), so the
+  // numbers shown here match what drove the salary calculation.
   const loadPeriodStats = useCallback(async () => {
     if (!children.length || !chores.length || !family) return
     const pStart = currentPeriodStart(family.config)
     const pEnd   = currentPeriodEnd(family.config)
-
-    // All calendar days in the period (not just days the child logged)
-    const allDates = []
-    let cur = new Date(pStart + 'T12:00:00')
-    const end = new Date(pEnd + 'T12:00:00')
-    while (cur <= end) {
-      allDates.push(cur.toISOString().slice(0, 10))
-      cur = new Date(cur.getTime() + 86400000)
-    }
 
     const stats = {}
     await Promise.all(children.map(async (child) => {
@@ -552,11 +545,15 @@ export default function ParentDashboard() {
       )
       if (!mandatory.length) { stats[child.id] = { approved: 0, expected: 0 }; return }
       const logs = await getChoreLogsForPeriod(child.id, pStart, pEnd)
+
+      // Same as calculatePayslip: only evaluate days with any log entry
+      const activeDates = [...new Set(logs.map(l => l.date))]
+
       let totalExpected = 0
       let totalApproved = 0
       for (const chore of mandatory) {
         let exp = 0, app = 0
-        for (const date of allDates) {
+        for (const date of activeDates) {
           const day = new Date(date + 'T12:00:00').getDay()
           let due = false
           switch (chore.recurrence) {
