@@ -168,12 +168,14 @@ export function calculatePayslip({
     },
     deductions: {
       tax,
+      taxRate:          config.taxRate,
       rent,
       recurringUtilities,
-      utilities: utilityItems,
+      utilities:        utilityItems,
       totalUtilities,
       loanRepayment,
-      loanInterest,   // shown on payslip, added to outstanding (not deducted from spending)
+      loanInterest,
+      loanInterestRate,
       emi: 0,
     },
     gross,

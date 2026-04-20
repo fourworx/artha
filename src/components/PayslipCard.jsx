@@ -150,7 +150,7 @@ export default function PayslipCard({ payslip, member, familyName }) {
       {/* Deductions */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <SectionLabel>DEDUCTIONS</SectionLabel>
-        <Row label={`Tax (${+((deductions.tax / (gross || 1)) * 100).toFixed(2)}%)`} value={fmt(-deductions.tax)} negative={deductions.tax > 0} />
+        <Row label={`Tax (${+(((deductions.taxRate ?? deductions.tax / (gross || 1)) * 100)).toFixed(2)}%)`} value={fmt(-deductions.tax)} negative={deductions.tax > 0} />
         <Row label="Rent"             value={fmt(-deductions.rent)} negative={deductions.rent > 0} />
         {(deductions.recurringUtilities ?? 0) > 0 && (
           <Row label="Utilities (recurring)" value={fmt(-deductions.recurringUtilities)} negative />
