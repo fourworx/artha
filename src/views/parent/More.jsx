@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom'
-import { Zap, SlidersHorizontal, Gift, Landmark, Download, Users, HandCoins, QrCode } from 'lucide-react'
+import { Zap, SlidersHorizontal, Gift, Landmark, Download, Users, HandCoins, QrCode, Receipt } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 
 const items = [
@@ -10,6 +10,7 @@ const items = [
   { icon: SlidersHorizontal,label: 'Economic Controls', sub: 'Tax, rent, interest, auto-save',        to: '/parent/economy'      },
   { icon: Gift,             label: 'Reward Manager',    sub: 'Add & price rewards',                   to: '/parent/rewards'      },
   { icon: Landmark,         label: 'Tax Fund',          sub: 'Family tax balance & spending',         to: '/parent/tax-fund'     },
+  { icon: Receipt,          label: 'Expenses Collected', sub: 'Reconcile rent, utilities & tax per child', to: '/parent/expenses' },
   { icon: Download,         label: 'Backup & Restore',  sub: 'Export / import family data',           to: '/parent/backup'       },
 ]
 

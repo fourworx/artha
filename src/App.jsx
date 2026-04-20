@@ -28,6 +28,7 @@ import Members          from './views/parent/Members'
 import Loans            from './views/parent/Loans'
 import ChildDetail      from './views/parent/ChildDetail'
 import InviteCode       from './views/parent/InviteCode'
+import Expenses         from './views/parent/Expenses'
 
 // Child Tier 2 views
 import Tier2Home  from './views/child-tier2/Home'
@@ -235,6 +236,7 @@ export default function App() {
               <Route path="loans"       element={<Loans />} />
               <Route path="invite-code" element={<InviteCode />} />
               <Route path="child/:memberId" element={<ChildDetail />} />
+              <Route path="expenses"        element={<Expenses />} />
             </Route>
 
             {/* Tier 2+ child routes */}
