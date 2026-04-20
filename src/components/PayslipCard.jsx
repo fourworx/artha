@@ -194,15 +194,9 @@ export default function PayslipCard({ payslip, member, familyName }) {
           <Row label={`→ Philanthropy (${Math.round((allocations.philanthropy / (net || 1)) * 100)}%)`} value={fmt(allocations.philanthropy)} positive />
         )}
         <Row label="→ Spending Wallet" value={fmt(allocations.spending)} positive={allocations.spending > 0} />
-        {interestEarned > 0 && (
-          <Row label="+ Interest on savings" value={fmt(interestEarned)} positive />
-        )}
-        {(subGoalInterestEarned ?? 0) > 0 && (
-          <Row label="+ Interest on goals" value={fmt(subGoalInterestEarned)} positive />
-        )}
-        {deductions.loanInterest > 0 && (
-          <Row label="− Loan interest accrued" value={fmt(-deductions.loanInterest)} negative dim />
-        )}
+        <Row label="+ Interest on savings" value={fmt(interestEarned ?? 0)} positive={interestEarned > 0} dim={!interestEarned} />
+        <Row label="+ Interest on goals"   value={fmt(subGoalInterestEarned ?? 0)} positive={subGoalInterestEarned > 0} dim={!subGoalInterestEarned} />
+        <Row label="− Loan interest accrued" value={fmt(-(deductions.loanInterest ?? 0))} negative={deductions.loanInterest > 0} dim={!deductions.loanInterest} />
       </div>
 
       {/* Footer */}
