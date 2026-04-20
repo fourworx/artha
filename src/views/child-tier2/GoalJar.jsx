@@ -453,16 +453,13 @@ export default function Goals() {
   const [showNewGoal,    setShowNewGoal]    = useState(false)
   const [depositTarget,  setDepositTarget]  = useState(null)
   const [showDeposit,    setShowDeposit]    = useState(false)
-  const [showDonate,     setShowDonate]     = useState(false)
   const [withdrawTarget, setWithdrawTarget] = useState(null)
 
-  const accounts     = currentMember?.accounts ?? {}
-  const philanthropy = accounts.philanthropy ?? 0
-  const spending     = accounts.spending ?? 0
-  const subGoals     = accounts.subGoals ?? []
+  const accounts  = currentMember?.accounts ?? {}
+  const spending  = accounts.spending ?? 0
+  const subGoals  = accounts.subGoals ?? []
 
   const interestRate = currentMember?.config?.interestRate ?? family?.config?.interestRate ?? 0.02
-  const philPct      = family?.config?.philanthropyPercent ?? 0.03
 
   const handleDeposit = async (goalId, amount) => {
     const amt = roundRupees(amount)
@@ -536,49 +533,6 @@ export default function Goals() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
-
-        {/* ── Philanthropy ── */}
-        <div className="flex flex-col gap-2">
-          <p className="text-xs font-mono px-1" style={{ color: 'var(--text-muted)' }}>PHILANTHROPY</p>
-          <div className="p-4 rounded-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <div className="flex items-start justify-between">
-              <div>
-                <p className="text-3xl font-mono font-bold" style={{ color: 'var(--positive)' }}>
-                  {fmt(philanthropy)}
-                </p>
-                <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-dim)' }}>
-                  {Math.round(philPct * 100)}% of each payslip · {Math.round(interestRate * 100)}%/{periodLabel} interest
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  onClick={() => { setDepositTarget(null); setShowDeposit(true) }}
-                  disabled={spending <= 0}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono transition-all active:scale-95"
-                  style={{
-                    background: spending > 0 ? 'rgba(74,222,128,0.12)' : 'var(--bg-raised)',
-                    border: `1px solid ${spending > 0 ? 'rgba(74,222,128,0.3)' : 'var(--border)'}`,
-                    color: spending > 0 ? 'var(--positive)' : 'var(--text-dim)',
-                  }}>
-                  <Plus size={12} />
-                  Add
-                </button>
-                <button
-                  onClick={() => setShowDonate(true)}
-                  disabled={philanthropy <= 0}
-                  className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono transition-all active:scale-95"
-                  style={{
-                    background: philanthropy > 0 ? 'rgba(251,191,36,0.12)' : 'var(--bg-raised)',
-                    border: `1px solid ${philanthropy > 0 ? 'rgba(251,191,36,0.3)' : 'var(--border)'}`,
-                    color: philanthropy > 0 ? 'var(--warning)' : 'var(--text-dim)',
-                  }}>
-                  <Heart size={12} />
-                  Donate
-                </button>
-              </div>
-            </div>
-          </div>
-        </div>
 
         {/* ── Sub-goals ── */}
         <div className="flex flex-col gap-2">
@@ -668,13 +622,6 @@ export default function Goals() {
         <DepositSheet
           goal={depositTarget} spending={spending} fmt={fmt}
           onDeposit={handleDeposit} onClose={() => setShowDeposit(false)}
-        />
-      )}
-
-      {showDonate && (
-        <DonateSheet
-          philanthropy={philanthropy} fmt={fmt}
-          onSubmit={handleDonateRequest} onClose={() => setShowDonate(false)}
         />
       )}
 

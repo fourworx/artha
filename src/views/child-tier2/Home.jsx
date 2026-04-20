@@ -476,8 +476,8 @@ export default function Tier2Home() {
             </div>
           </button>
 
-          <button onClick={() => navigate('/child/goal')}
-            className="p-4 rounded-xl text-left transition-all active:scale-95 flex flex-col"
+          <div
+            className="p-4 rounded-xl text-left flex flex-col"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>PHILANTHROPY</p>
             <p className="text-2xl font-mono font-bold mt-1" style={{ color: 'var(--positive)' }}>
@@ -489,7 +489,7 @@ export default function Tier2Home() {
             <div className="mt-2 -mx-1">
               <Sparkline data={cumulativeDonations} color="#4ade80" />
             </div>
-          </button>
+          </div>
         </div>
 
         {/* Outstanding loan chip — tap to prepay */}

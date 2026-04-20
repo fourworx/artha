@@ -1,7 +1,60 @@
 ---
-name: Artha — Session 12 Handoff
-description: Full current state after sessions 1–12; use to resume in next session
+name: Artha — Session 13 Handoff
+description: Full current state after sessions 1–13; use to resume in next session
 type: project
+---
+
+## Session 13 completed (2026-04-17)
+
+### Features built / bugs fixed
+
+**P2 (second parent) setup**
+- Members screen: two buttons — `+ Child` and `+ Parent`
+- `MemberSheet` takes `addingRole` prop; parent form skips tier/salary/goalJar fields
+- Placeholder text switches between "Child's name" / "Parent's name"
+- `InviteCode` screen: changed `children` → `members` (shows parents too), label "FOR WHICH MEMBER?"
+
+**Economic Controls overhaul**
+- Replaced all `SliderRow` components with free-input `InputRow` (no max limit, supports decimals)
+- `isPercent` prop converts decimal↔percent automatically
+- `pct` formatter shows 2 decimal places: `${+(v * 100).toFixed(2)}%`
+- Example calculation uses actual child's `baseSalary` instead of hardcoded ₹200
+- Monthly payday: changed from 1–28 cap to 1–31 with explanatory note
+
+**ChoreManager salary display**
+- Removed the dual-card 4.33x multiplier display (was confusing)
+- Single card showing `PER WEEK` or `PER MONTH` salary (just the actual base salary)
+
+**Bonus chores — full fix**
+- Root cause: `isDueToday` was filtering bonus chores by recurrence day (designed for mandatory chores)
+- Fix: removed `isDueToday` filter entirely from `getAvailableBonusChores` — bonus chores always visible when active
+- Recurrence for bonus = earn frequency, not visibility
+
+**Bonus money timing**
+- Was: `approveBonusChoreLog` immediately credited spending wallet
+- Now: bonus logs collected in `calculatePayslip`, earnings added to `newSpending` at settle time (bypass tax/allocations)
+- `settlePayslip` adds individual bonus transactions per chore item
+- Parent approval queue badge shows "⚡ +₹X on payslip" (not "instant")
+
+**Approve All button**
+- Shown in `ApproveChores` when more than one log in queue
+- Processes all logs sequentially
+
+**Draft payslip UX**
+- Home.jsx: amber banner at top when `latestPayslip?.status === 'draft'` → taps to Ledger
+- ChildNav: amber dot badge on Ledger tab driven by `hasDraftPayslip` prop from `Tier2Shell`
+- `Tier2Shell` in App.jsx fetches latest payslip on mount, passes to ChildNav
+
+**PayslipCard interest rows**
+- Always shows interest/loan rows (dimmed when zero) — no conditional hiding
+- `+ Interest on savings`, `+ Interest on goals`, `− Loan interest accrued`
+- Bonus chores section shows after GROSS (only when items exist)
+
+**Philanthropy / Goals cleanup**
+- Philanthropy earns NO interest (by design)
+- `GoalJar.jsx`: removed entire philanthropy section — screen now shows ONLY custom sub-goals
+- `Home.jsx`: philanthropy card changed from navigable `<button>` to plain `<div>` (no navigation)
+
 ---
 
 ## Session 12 completed (2026-04-15)
@@ -158,7 +211,7 @@ alter table device_claims disable row level security;
   currency: 'INR',
   payPeriod: 'weekly',           // 'weekly' | 'monthly'
   paydayDow: 6,                  // 0=Sun … 6=Sat (weekly)
-  paydayDom: 28,                 // 1–28 (monthly)
+  paydayDom: 28,                 // 1–31 (monthly; capped at last day of month at run time)
   autoPayslip: false,
   taxRate: 0.12,
   rentAmount: 30,
