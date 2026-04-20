@@ -129,7 +129,7 @@ export default function PayslipCard({ payslip, member, familyName }) {
         <Row label="Adjusted Salary"  value={fmt(earnings.adjustedSalary)} positive={earnings.adjustedSalary > 0} />
         {earnings.streakBonus > 0 && (
           <Row
-            label={`🔥 Streak bonus (${earnings.streakDays}d · +${Math.round(earnings.streakBonusPct * 100)}%)`}
+            label={`🔥 Streak bonus (${earnings.streakDays}d · +${+(earnings.streakBonusPct * 100).toFixed(2)}%)`}
             value={fmt(earnings.streakBonus)} positive indent />
         )}
         <Divider char="·" />
@@ -150,7 +150,7 @@ export default function PayslipCard({ payslip, member, familyName }) {
       {/* Deductions */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <SectionLabel>DEDUCTIONS</SectionLabel>
-        <Row label={`Tax (${Math.round((deductions.tax / (gross || 1)) * 100)}%)`} value={fmt(-deductions.tax)} negative={deductions.tax > 0} />
+        <Row label={`Tax (${+((deductions.tax / (gross || 1)) * 100).toFixed(2)}%)`} value={fmt(-deductions.tax)} negative={deductions.tax > 0} />
         <Row label="Rent"             value={fmt(-deductions.rent)} negative={deductions.rent > 0} />
         {(deductions.recurringUtilities ?? 0) > 0 && (
           <Row label="Utilities (recurring)" value={fmt(-deductions.recurringUtilities)} negative />
@@ -189,9 +189,9 @@ export default function PayslipCard({ payslip, member, familyName }) {
       {/* Allocations */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <SectionLabel>ALLOCATIONS</SectionLabel>
-        <Row label={`→ Savings (${Math.round((allocations.savings / (net || 1)) * 100)}%)`} value={fmt(allocations.savings)} positive={allocations.savings > 0} />
+        <Row label={`→ Savings (${+((allocations.savings / (net || 1)) * 100).toFixed(2)}%)`} value={fmt(allocations.savings)} positive={allocations.savings > 0} />
         {allocations.philanthropy > 0 && (
-          <Row label={`→ Philanthropy (${Math.round((allocations.philanthropy / (net || 1)) * 100)}%)`} value={fmt(allocations.philanthropy)} positive />
+          <Row label={`→ Philanthropy (${+((allocations.philanthropy / (net || 1)) * 100).toFixed(2)}%)`} value={fmt(allocations.philanthropy)} positive />
         )}
         <Row label="→ Spending Wallet" value={fmt(allocations.spending)} positive={allocations.spending > 0} />
         <Row label="+ Interest on savings" value={fmt(interestEarned ?? 0)} positive={interestEarned > 0} dim={!interestEarned} />

@@ -657,7 +657,7 @@ export default function Tier2Home() {
               {fmt(accounts.savings ?? 0)}
             </p>
             <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
-              {Math.round(((currentMember?.config?.interestRate ?? family?.config?.interestRate) ?? 0.02) * 100)}%/{periodLabel} interest
+              {+(((currentMember?.config?.interestRate ?? family?.config?.interestRate) ?? 0.02) * 100).toFixed(2)}%/{periodLabel} interest
             </p>
             <div className="mt-2 -mx-1">
               <Sparkline data={savingsHistory} color="#60a5fa" />

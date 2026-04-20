@@ -776,7 +776,7 @@ export async function addLoanInterest(memberId, interestRate) {
     memberId,
     type: 'loan_interest',
     amount: interest,
-    description: `Loan interest (${Math.round(interestRate * 100)}%)`,
+    description: `Loan interest (${+(interestRate * 100).toFixed(2)}%)`,
     date: today(),
     relatedId: null,
   })

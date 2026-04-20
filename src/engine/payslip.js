@@ -341,7 +341,7 @@ export async function settlePayslip(payslipId) {
     ps.deductions.tax > 0 && {
       type: 'tax',
       amount: -ps.deductions.tax,
-      description: `Tax (${Math.round(family.config.taxRate * 100)}%)`,
+      description: `Tax (${+(family.config.taxRate * 100).toFixed(2)}%)`,
     },
     ps.deductions.rent > 0 && {
       type: 'rent',
@@ -361,7 +361,7 @@ export async function settlePayslip(payslipId) {
     ps.interestEarned > 0 && {
       type: 'interest',
       amount: ps.interestEarned,
-      description: `Savings interest (${Math.round(family.config.interestRate * 100)}%/wk)`,
+      description: `Savings interest (${+(family.config.interestRate * 100).toFixed(2)}%/wk)`,
     },
     ps.allocations?.philanthropy > 0 && {
       type: 'deposit',
@@ -371,7 +371,7 @@ export async function settlePayslip(payslipId) {
     ps.deductions.loanInterest > 0 && {
       type: 'loan_interest',
       amount: ps.deductions.loanInterest,
-      description: `Loan interest (${Math.round(family.config.loanInterestRate * 100)}%/period)`,
+      description: `Loan interest (${+(family.config.loanInterestRate * 100).toFixed(2)}%/period)`,
     },
     ps.deductions.loanRepayment > 0 && ps.loanOutstandingAfter > 0 && {
       type: 'loan_repay',

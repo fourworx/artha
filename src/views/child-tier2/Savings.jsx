@@ -59,7 +59,7 @@ export default function Savings() {
           {fmt(savings)}
         </p>
         <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
-          {Math.round(interestRate * 100)}% interest/week · auto-save {Math.round(autoSave * 100)}% of net pay
+          {+(interestRate * 100).toFixed(2)}% interest/week · auto-save {+(autoSave * 100).toFixed(2)}% of net pay
         </p>
       </div>
 
