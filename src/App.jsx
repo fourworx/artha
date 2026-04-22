@@ -2,7 +2,7 @@ import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom
 import { useState, useEffect, useCallback } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { FamilyProvider, useFamily } from './context/FamilyContext'
-import { getPendingLogsForMembers, getPendingMemberRequests, getDeviceClaim, getOrCreateDeviceId, checkFamilyExists, getLatestPayslip } from './db/operations'
+import { getPendingLogsForMembers, getPendingMemberRequests, getPendingRewardRequests, getDeviceClaim, getOrCreateDeviceId, checkFamilyExists, getLatestPayslip } from './db/operations'
 import { supabase } from './db/supabase'
 import { FAMILY_ID } from './utils/constants'
 import ParentNav from './components/ParentNav'
@@ -151,7 +151,7 @@ function ComingSoon({ label }) {
 // ── Parent shell ──────────────────────────────────────────────────────────────
 function ParentShell() {
   const { currentMember } = useAuth()
-  const { children } = useFamily()
+  const { children, reloadCount } = useFamily()
   const [pendingCount, setPendingCount] = useState(0)
 
   useEffect(() => {
@@ -160,8 +160,11 @@ function ParentShell() {
     Promise.all([
       getPendingLogsForMembers(ids),
       getPendingMemberRequests(ids),
-    ]).then(([logs, memberReqs]) => setPendingCount(logs.length + memberReqs.length))
-  }, [children])
+      getPendingRewardRequests(ids),
+    ]).then(([logs, memberReqs, rewardReqs]) =>
+      setPendingCount(logs.length + memberReqs.length + rewardReqs.length)
+    )
+  }, [children, reloadCount])
 
   if (!currentMember || currentMember.role !== 'parent') return <Navigate to="/" replace />
 
