@@ -5,7 +5,7 @@ import { useCurrency } from '../context/FamilyContext'
 
 const DIVIDER = '─'.repeat(36)
 
-function Row({ label, value, dim, bold, positive, negative, indent }) {
+function Row({ label, value, dim, bold, positive, negative, indent, color }) {
   return (
     <div className="flex items-baseline justify-between" style={{ paddingLeft: indent ? '1rem' : 0 }}>
       <span style={{
@@ -22,6 +22,7 @@ function Row({ label, value, dim, bold, positive, negative, indent }) {
         fontWeight: bold ? 700 : 400,
         color: positive ? 'var(--positive)'
              : negative ? 'var(--negative)'
+             : color    ? color
              : bold     ? 'var(--text-primary)'
              : 'var(--text-muted)',
         minWidth: '70px',
@@ -138,6 +139,13 @@ export default function PayslipCard({ payslip, member, familyName }) {
             {earnings.bonusChoreItems.map((b, i) => (
               <Row key={i} label={`⚡ ${b.title}`} value={fmt(b.value)} positive indent />
             ))}
+            {(payslip.bonusPotential ?? 0) > 0 && (
+              <div style={{ paddingLeft: '1rem', display: 'flex', justifyContent: 'flex-end' }}>
+                <span style={{ fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', color: 'var(--text-dim)' }}>
+                  {fmt(earnings.bonusChoreEarnings)} of {fmt(payslip.bonusPotential)} potential ({Math.round(earnings.bonusChoreEarnings / payslip.bonusPotential * 100)}%)
+                </span>
+              </div>
+            )}
           </>
         )}
         <Divider char="·" />
@@ -190,7 +198,7 @@ export default function PayslipCard({ payslip, member, familyName }) {
         <SectionLabel>ALLOCATIONS</SectionLabel>
         <Row label={`→ Savings (${+((allocations.savingsRate ?? allocations.savings / (net || 1)) * 100).toFixed(2)}%)`} value={fmt(allocations.savings)} positive={allocations.savings > 0} />
         {allocations.philanthropy > 0 && (
-          <Row label={`→ Philanthropy (${+((allocations.philanthropyRate ?? allocations.philanthropy / (net || 1)) * 100).toFixed(2)}%)`} value={fmt(allocations.philanthropy)} positive />
+          <Row label={`→ Philanthropy (${+((allocations.philanthropyRate ?? allocations.philanthropy / (net || 1)) * 100).toFixed(2)}%)`} value={fmt(allocations.philanthropy)} color='#D4A017' />
         )}
         <Row label="→ Spending Wallet" value={fmt(allocations.spending)} positive={allocations.spending > 0} />
         <Row label="+ Interest on savings" value={fmt(interestEarned ?? 0)} positive={interestEarned > 0} dim={!interestEarned} />

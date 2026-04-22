@@ -22,7 +22,7 @@ export default function SpendingBreakdown({ transactions = [] }) {
     rent:       { label: 'Rent',       color: '#f87171', value: 0 },
     tax:        { label: 'Tax',        color: '#fb923c', value: 0 },
     savings:    { label: 'Savings',    color: '#60a5fa', value: 0 },
-    philanthropy:{ label: 'Philanthropy', color: '#4ade80', value: 0 },
+    philanthropy:{ label: 'Philanthropy', color: '#D4A017', value: 0 },
     reward:     { label: 'Rewards',    color: '#c084fc', value: 0 },
     loan_repay: { label: 'Loan repay', color: '#fbbf24', value: 0 },
     spending:   { label: 'Spending',   color: '#a3a3a3', value: 0 },

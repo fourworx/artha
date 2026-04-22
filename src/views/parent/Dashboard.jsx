@@ -754,7 +754,7 @@ export default function ParentDashboard() {
                   {[
                     { label: 'SPENDING',     value: child.accounts?.spending     ?? 0, color: 'var(--positive)' },
                     { label: 'SAVINGS',      value: child.accounts?.savings      ?? 0, color: 'var(--accent-blue)' },
-                    { label: 'PHILANTHROPY', value: child.accounts?.philanthropy ?? 0, color: 'var(--positive)' },
+                    { label: 'PHILANTHROPY', value: child.accounts?.philanthropy ?? 0, color: '#D4A017' },
                   ].map(({ label, value, color }) => (
                     <div key={label} className="p-2 rounded-lg text-center" style={{ background: 'var(--bg-raised)' }}>
                       <p className="text-xs font-mono" style={{ color: 'var(--text-muted)', fontSize: '9px' }}>{label}</p>

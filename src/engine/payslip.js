@@ -95,6 +95,24 @@ export function calculatePayslip({
     .map(l => ({ logId: l.id, choreId: l.choreId, title: bonusChoreMap[l.choreId].title, value: bonusChoreMap[l.choreId].value }))
   const bonusChoreEarnings = bonusChoreItems.reduce((s, b) => s + b.value, 0)
 
+  // ── Bonus chore potential: max earnings if child did every bonus chore ─
+  const periodDays = Math.round(
+    (new Date(periodEnd + 'T12:00:00') - new Date(periodStart + 'T12:00:00')) / (1000 * 60 * 60 * 24)
+  ) + 1
+  const bonusChoresAll = allChores.filter(c => c.type === 'bonus' && c.isActive && c.assignedTo.includes(member.id))
+  const bonusPotential = bonusChoresAll.reduce((sum, c) => {
+    let freq
+    switch (c.recurrence) {
+      case 'daily':   freq = periodDays; break
+      case 'weekday': freq = Math.round(periodDays * 5 / 7); break
+      case 'weekend': freq = Math.round(periodDays * 2 / 7); break
+      case 'weekly':  freq = Math.ceil(periodDays / 7); break
+      case 'custom':  freq = Math.round((periodDays / 7) * (c.daysPerWeek ?? 1)); break
+      default:        freq = 1; break
+    }
+    return sum + (c.value ?? 0) * freq
+  }, 0)
+
   // ── 4. Gross (salary + streak bonus + bonus chore earnings, all taxed) ──
   const gross = adjustedSalary + streakBonus + bonusChoreEarnings
 
@@ -155,6 +173,7 @@ export function calculatePayslip({
   const newPhilanthropy = philanthropyBalance + philanthropyAlloc   // no interest
 
   return {
+    bonusPotential,
     earnings: {
       baseSalary: member.baseSalary,
       mandatoryCompletionPercent,

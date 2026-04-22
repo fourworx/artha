@@ -95,6 +95,7 @@ function mapPayslip(row) {
     createdAt:                   row.created_at,
     totalDeductions:             row.total_deductions,
     status:                      row.status ?? 'settled',
+    bonusPotential:              row.bonus_potential ?? 0,
   }
 }
 
@@ -578,6 +579,7 @@ export async function addPayslip(payslip) {
     credit_score:          payslip.creditScore,
     created_at:            payslip.createdAt ?? new Date().toISOString(),
     status:                payslip.status ?? 'draft',
+    bonus_potential:       payslip.bonusPotential ?? 0,
   }
   throwIfError(await supabase.from('payslips').insert(row))
 }

@@ -457,12 +457,49 @@ export default function Tier2Home() {
         periodEnd,
         streakDays,
       })
+
+      // ── Mandatory % over FULL period (all days, not just days with logs) ──
+      const start = new Date(periodStart + 'T12:00:00')
+      const end   = new Date(periodEnd   + 'T12:00:00')
+      const totalDays = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1
+      let totalExpected = 0
+      let totalApproved = 0
+      for (let i = 0; i < totalDays; i++) {
+        const d = new Date(start)
+        d.setDate(start.getDate() + i)
+        const day = d.getDay()
+        const dateStr = d.toISOString().split('T')[0]
+        for (const chore of mandatoryChores) {
+          let due = false
+          switch (chore.recurrence) {
+            case 'daily':   due = true; break
+            case 'weekday': due = day >= 1 && day <= 5; break
+            case 'weekend': due = day === 0 || day === 6; break
+            case 'weekly':  due = day === 1; break
+            case 'custom':  due = true; break
+          }
+          if (due) {
+            totalExpected++
+            if (choreLogs.some(l => l.choreId === chore.id && l.date === dateStr && l.status === 'approved'))
+              totalApproved++
+          }
+        }
+      }
+      const mandatoryPct = totalExpected > 0 ? Math.round(totalApproved / totalExpected * 100) : 0
+
+      // ── Potential gross: full salary + streak bonus + all bonus chore potential ──
+      const potentialGross = currentMember.baseSalary
+        + Math.round(currentMember.baseSalary * calc.earnings.streakBonusPct)
+        + (calc.bonusPotential ?? 0)
+
       setProjected({
-        net: calc.net,
-        completionPct: Math.round(calc.earnings.mandatoryCompletionPercent * 100),
-        savings: calc.allocations.savings,
-        spending: calc.allocations.spending,
-        streakBonus: calc.earnings.streakBonus,
+        earnedGross:    calc.gross,
+        potentialGross,
+        mandatoryPct,
+        bonusEarned:    calc.earnings.bonusChoreEarnings,
+        bonusPotential: calc.bonusPotential ?? 0,
+        interest:       (calc.interestEarned ?? 0) + (calc.subGoalInterestEarned ?? 0),
+        streakBonus:    calc.earnings.streakBonus,
         streakBonusPct: calc.earnings.streakBonusPct,
       })
     } catch { /* silent — projection is non-critical */ }
@@ -705,35 +742,57 @@ export default function Tier2Home() {
 
         {/* Projected earnings widget */}
         {projected !== null && (
-          <div className="px-3 py-3 rounded-xl flex flex-col gap-2"
+          <div className="px-3 py-3 rounded-xl flex flex-col gap-2.5"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-                PROJECTED {periodLabel.toUpperCase()} PAY
-              </span>
-              <span className="text-xs font-mono px-2 py-0.5 rounded-full"
-                style={{
-                  background: projected.completionPct === 100 ? 'rgba(74,222,128,0.12)' : 'rgba(251,191,36,0.1)',
-                  color: projected.completionPct === 100 ? 'var(--positive)' : 'var(--warning)',
-                }}>
-                {projected.completionPct}% chores
-              </span>
-            </div>
+
+            <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+              PROJECTED {periodLabel.toUpperCase()} PAY
+            </span>
+
+            {/* Gross earned / potential */}
             <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-mono font-bold" style={{ color: projected.net > 0 ? 'var(--positive)' : 'var(--text-muted)' }}>
-                {fmt(projected.net)}
+              <span className="text-2xl font-mono font-bold" style={{ color: 'var(--positive)' }}>
+                {fmt(projected.earnedGross)}
               </span>
-              <span className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>net</span>
+              <span className="text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
+                / {fmt(projected.potentialGross)} gross
+              </span>
             </div>
-            <div className="flex gap-3 text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
-              <span>→ {fmt(projected.savings)} savings</span>
-              <span>→ {fmt(projected.spending)} spending</span>
-            </div>
+
+            {/* Mandatory chore % */}
+            <span className="text-xs font-mono px-2 py-0.5 rounded-full self-start"
+              style={{
+                background: projected.mandatoryPct === 100 ? 'rgba(74,222,128,0.12)' : 'rgba(251,191,36,0.1)',
+                color: projected.mandatoryPct === 100 ? 'var(--positive)' : 'var(--warning)',
+              }}>
+              {projected.mandatoryPct}% mandatory chores complete
+            </span>
+
+            {/* Streak bonus */}
             {projected.streakBonus > 0 && (
               <p className="text-xs font-mono" style={{ color: 'var(--warning)' }}>
-                🔥 +{fmt(projected.streakBonus)} streak bonus (+{Math.round(projected.streakBonusPct * 100)}%)
+                🔥 +{fmt(projected.streakBonus)} streak bonus
               </p>
             )}
+
+            {/* Bonus chores */}
+            {projected.bonusPotential > 0 && (
+              <div className="flex items-center justify-between px-3 py-2 rounded-lg"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
+                <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>⚡ BONUS CHORES</span>
+                <span className="text-xs font-mono font-semibold" style={{ color: 'var(--warning)' }}>
+                  {fmt(projected.bonusEarned)} / {fmt(projected.bonusPotential)}
+                </span>
+              </div>
+            )}
+
+            {/* Interest */}
+            {projected.interest > 0 && (
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                + {fmt(projected.interest)} interest (savings &amp; goals)
+              </p>
+            )}
+
             <p className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
               If payslip ran right now
             </p>

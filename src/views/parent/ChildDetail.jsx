@@ -8,6 +8,7 @@ import { displayDate, today } from '../../utils/dates'
 import { ChevronLeft, ChevronDown, ChevronUp, Heart, Target } from 'lucide-react'
 import NetWorthChart from '../../components/NetWorthChart'
 import SpendingBreakdown from '../../components/SpendingBreakdown'
+import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
 const TYPE_META = {
   salary:        { label: 'Salary',            emoji: '💼', color: 'var(--positive)' },
@@ -218,6 +219,21 @@ export default function ChildDetail() {
       return { label, value: nw }
     })
 
+  const bonusChartData = [...payslips]
+    .filter(p => p.status === 'settled' && (p.bonusPotential ?? 0) > 0)
+    .sort((a, b) => a.periodEnd.localeCompare(b.periodEnd))
+    .map(p => {
+      const earned = p.earnings?.bonusChoreEarnings ?? 0
+      const potential = p.bonusPotential ?? 0
+      return {
+        period:     periodId(p.periodEnd),
+        earned,
+        uncaptured: Math.max(0, potential - earned),
+        pct:        potential > 0 ? Math.round(earned / potential * 100) : 0,
+        potential,
+      }
+    })
+
   const score = child.creditScore ?? 500
   const scoreColor = score >= 700 ? 'var(--positive)' : score >= 500 ? 'var(--warning)' : 'var(--negative)'
   const scoreBg    = score >= 700 ? 'rgba(74,222,128,0.1)' : score >= 500 ? 'rgba(251,191,36,0.1)' : 'rgba(239,68,68,0.1)'
@@ -261,7 +277,7 @@ export default function ChildDetail() {
             {[
               { label: 'SPENDING',     value: accounts.spending     ?? 0, color: 'var(--positive)' },
               { label: 'SAVINGS',      value: accounts.savings      ?? 0, color: 'var(--accent-blue)' },
-              { label: 'PHILANTHROPY', value: accounts.philanthropy ?? 0, color: 'var(--positive)' },
+              { label: 'PHILANTHROPY', value: accounts.philanthropy ?? 0, color: '#D4A017' },
             ].map(({ label, value, color }) => (
               <div key={label} className="p-3 rounded-xl text-center"
                 style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
@@ -275,16 +291,16 @@ export default function ChildDetail() {
         {/* Philanthropy: donate button */}
         {child.tier >= 2 && (accounts.philanthropy ?? 0) > 0 && (
           <div className="flex items-center justify-between px-3 py-2 rounded-xl"
-            style={{ background: 'rgba(74,222,128,0.06)', border: '1px solid rgba(74,222,128,0.2)' }}>
+            style={{ background: 'rgba(212,160,23,0.06)', border: '1px solid rgba(212,160,23,0.2)' }}>
             <div className="flex items-center gap-2">
-              <Heart size={14} style={{ color: 'var(--positive)' }} />
-              <span className="text-xs font-mono" style={{ color: 'var(--positive)' }}>
+              <Heart size={14} style={{ color: '#D4A017' }} />
+              <span className="text-xs font-mono" style={{ color: '#D4A017' }}>
                 Philanthropy: {fmt(accounts.philanthropy)}
               </span>
             </div>
             <button onClick={() => { setDonateSheet(true); setActionError(null) }}
               className="text-xs font-mono px-2 py-1 rounded-lg active:scale-95"
-              style={{ background: 'rgba(74,222,128,0.15)', color: 'var(--positive)', border: '1px solid rgba(74,222,128,0.3)' }}>
+              style={{ background: 'rgba(212,160,23,0.15)', color: '#D4A017', border: '1px solid rgba(212,160,23,0.3)' }}>
               Donate
             </button>
           </div>
@@ -368,6 +384,51 @@ export default function ChildDetail() {
                 <SpendingBreakdown transactions={allTxs} />
               </div>
             )}
+          </div>
+        )}
+
+        {/* Bonus chore performance chart */}
+        {bonusChartData.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-mono px-1" style={{ color: 'var(--text-muted)' }}>BONUS CHORE PERFORMANCE</p>
+            <div className="p-4 rounded-xl flex flex-col gap-3"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+              <div className="flex items-center gap-4 text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
+                <span className="flex items-center gap-1">
+                  <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: '#F59E0B' }} />
+                  Earned
+                </span>
+                <span className="flex items-center gap-1">
+                  <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: 'var(--bg-raised)', border: '1px solid var(--border)' }} />
+                  Left on table
+                </span>
+                <span className="flex items-center gap-1">
+                  <span style={{ display: 'inline-block', width: 10, height: 2, background: 'var(--warning)' }} />
+                  % captured
+                </span>
+              </div>
+              <ResponsiveContainer width="100%" height={150}>
+                <ComposedChart data={bonusChartData} margin={{ top: 4, right: 24, bottom: 0, left: -10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                  <XAxis dataKey="period" tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} />
+                  <YAxis yAxisId="left" tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} width={40} />
+                  <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={32} />
+                  <Tooltip
+                    contentStyle={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: '8px', fontFamily: 'JetBrains Mono', fontSize: '11px' }}
+                    labelStyle={{ color: 'var(--text-muted)', marginBottom: 4 }}
+                    formatter={(value, name) => {
+                      if (name === 'pct') return [`${value}%`, 'Capture rate']
+                      if (name === 'earned') return [fmt(value), 'Earned']
+                      if (name === 'uncaptured') return [fmt(value), 'Left on table']
+                      return [value, name]
+                    }}
+                  />
+                  <Bar yAxisId="left" dataKey="earned" stackId="a" fill="#F59E0B" radius={[0, 0, 3, 3]} />
+                  <Bar yAxisId="left" dataKey="uncaptured" stackId="a" fill="var(--bg-raised)" stroke="var(--border)" strokeWidth={1} radius={[3, 3, 0, 0]} />
+                  <Line yAxisId="right" type="monotone" dataKey="pct" stroke="var(--warning)" strokeWidth={2} dot={{ fill: 'var(--warning)', r: 3, strokeWidth: 0 }} />
+                </ComposedChart>
+              </ResponsiveContainer>
+            </div>
           </div>
         )}
 
