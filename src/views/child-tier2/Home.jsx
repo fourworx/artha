@@ -653,14 +653,14 @@ export default function Tier2Home() {
             className="p-4 rounded-xl text-left transition-all active:scale-95 flex flex-col"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SAVINGS</p>
-            <p className="text-2xl font-mono font-bold mt-1" style={{ color: 'var(--accent-blue)' }}>
+            <p className="text-2xl font-mono font-bold mt-1" style={{ color: '#1E3A8A' }}>
               {fmt(accounts.savings ?? 0)}
             </p>
             <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
               {+(((currentMember?.config?.interestRate ?? family?.config?.interestRate) ?? 0.02) * 100).toFixed(2)}%/{periodLabel} interest
             </p>
             <div className="mt-2 -mx-1">
-              <Sparkline data={savingsHistory} color="#60a5fa" />
+              <Sparkline data={savingsHistory} color="#1E3A8A" />
             </div>
           </button>
 
@@ -668,14 +668,14 @@ export default function Tier2Home() {
             className="p-4 rounded-xl text-left transition-all active:scale-95 flex flex-col"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>PHILANTHROPY</p>
-            <p className="text-2xl font-mono font-bold mt-1" style={{ color: 'var(--positive)' }}>
+            <p className="text-2xl font-mono font-bold mt-1" style={{ color: '#D4A017' }}>
               {fmt(philanthropy)}
             </p>
             <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
               cumulative donations ↑
             </p>
             <div className="mt-2 -mx-1">
-              <Sparkline data={cumulativeDonations} color="#4ade80" />
+              <Sparkline data={cumulativeDonations} color="#D4A017" />
             </div>
             <p className="text-xs font-mono mt-1 flex items-center gap-0.5" style={{ color: 'var(--text-dim)' }}>
               Donate <ChevronRight size={11} />

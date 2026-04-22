@@ -1,7 +1,51 @@
 ---
-name: Artha — Session 13 Handoff
-description: Full current state after sessions 1–13; use to resume in next session
+name: Artha — Session 14 Handoff
+description: Full current state after sessions 1–14; use to resume in next session
 type: project
+---
+
+## Session 14 completed (2026-04-22)
+
+### Features built / bugs fixed
+
+**Bonus chores now taxed (included in gross)**
+- Was: bonus chore earnings bypassed tax, went directly to spending wallet at settle time
+- Now: `gross = adjustedSalary + streakBonus + bonusChoreEarnings` — all taxed together
+- `newSpending` no longer adds `bonusChoreEarnings` separately
+- PayslipCard label changed to "BONUS CHORES (included in gross)"
+
+**PayslipCard earnings order fixed**
+- Was: Adjusted Salary → GROSS → BONUS CHORES (confusing order)
+- Now: Adjusted Salary → Streak Bonus → BONUS CHORES → divider → GROSS (logical flow)
+
+**Reward store price showing NaN — fixed**
+- Root cause: DB column is `cost`, but `mapReward` returned it as `cost` key while all UI/forms used `price`
+- Fix: `mapReward` now maps `cost` → `price`; `addReward` writes `reward.price` → `cost`; `updateReward` checks `'price' in changes` and maps to `cost`
+
+**Parent approve-tab badge now includes reward requests + updates in real-time**
+- Was: badge only counted chore logs + member requests (donations); reward requests not included
+- Was: `useEffect` only depended on `children`, not `reloadCount` — no real-time update
+- Fix: added `getPendingRewardRequests(ids)` to badge query; added `reloadCount` as dependency
+
+**Child balance refreshes in real-time after parent approval**
+- Was: `Tier2Shell` didn't subscribe to realtime ticks — child's spending balance stayed stale
+- Fix: `Tier2Shell` now subscribes to `reloadCount`; calls `refreshMember()` on every tick
+
+**Child toast notification when parent approves a reward**
+- New: `Tier2Shell` polls `getRewardRequests` on each `reloadCount` tick
+- Uses a `Set` (seenRewardIds) to track known request IDs — seeds on first load, toasts only future approvals
+- Green pill toast "🎉 [Reward title] approved!" appears above nav bar for 4 seconds, dismissable on tap
+- `fadeInUp` keyframe added to `index.css`
+
+**Reward purchase limit removed**
+- Was: child could only buy each reward once per day (blocked by request status check)
+- Now: always purchasable; `RewardCard` shows an amber "N pending" badge if there are pending requests
+- Replaced `requestMap` (most-recent-status per reward) with `pendingCountMap` (count of pending per reward)
+
+**Spending history date text visibility**
+- Date in `SpendingSheet` transaction rows was `var(--text-dim)` (nearly invisible)
+- Changed to `var(--text-muted)` for readable contrast
+
 ---
 
 ## Session 13 completed (2026-04-17)
