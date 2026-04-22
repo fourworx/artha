@@ -142,14 +142,26 @@ export function calculatePayslip({
     return sum + (c.value ?? 0) * freq
   }, 0)
 
+  // ── Vacation overrides ──────────────────────────────────────────────────
+  const onVacation = member.config?.vacation?.active ?? false
+  const paidLeave  = member.config?.vacation?.paidLeave ?? false
+  // Paid leave:   full salary, normal deductions, no chore/bonus effect
+  // Unpaid leave: zero salary, zero deductions, interest still accrues
+  const effectiveSalary     = onVacation ? (paidLeave ? member.baseSalary : 0) : adjustedSalary
+  const effectiveStreak     = onVacation ? 0 : streakBonus
+  const effectiveBonus      = onVacation ? 0 : bonusChoreEarnings
+  const effectiveMissed     = onVacation ? 0 : missedMandatoryCount
+  const effectiveCompletion = onVacation ? (paidLeave ? 1 : mandatoryCompletionPercent) : mandatoryCompletionPercent
+
   // ── 4. Gross (salary + streak bonus + bonus chore earnings, all taxed) ──
-  const gross = adjustedSalary + streakBonus + bonusChoreEarnings
+  const gross = effectiveSalary + effectiveStreak + effectiveBonus
 
   // ── 5. Deductions ───────────────────────────────────────────────
   const tax                = roundRupees(gross * config.taxRate)
-  const rent               = config.rentAmount
-  const recurringUtilities = config.utilitiesAmount ?? 0
-  const utilityItems       = utilityCharges.map(u => ({ reason: u.reason, amount: u.amount, id: u.id }))
+  // Rent & utilities waived on unpaid leave (no income, no charges)
+  const rent               = onVacation && !paidLeave ? 0 : config.rentAmount
+  const recurringUtilities = onVacation && !paidLeave ? 0 : (config.utilitiesAmount ?? 0)
+  const utilityItems       = onVacation && !paidLeave ? [] : utilityCharges.map(u => ({ reason: u.reason, amount: u.amount, id: u.id }))
   const totalUtilities     = utilityItems.reduce((sum, u) => sum + u.amount, 0)
   const totalDeductions    = tax + rent + recurringUtilities + totalUtilities
 
@@ -204,15 +216,17 @@ export function calculatePayslip({
   return {
     bonusPotential,
     earnings: {
-      baseSalary: member.baseSalary,
-      mandatoryCompletionPercent,
-      adjustedSalary,
-      streakDays,
-      streakBonusPct,
-      streakBonus,
-      bonusChoreEarnings,
-      bonusChoreItems,
-      missedMandatoryCount,
+      baseSalary:                  member.baseSalary,
+      mandatoryCompletionPercent:  effectiveCompletion,
+      adjustedSalary:              effectiveSalary,
+      streakDays:                  onVacation ? 0 : streakDays,
+      streakBonusPct:              onVacation ? 0 : streakBonusPct,
+      streakBonus:                 effectiveStreak,
+      bonusChoreEarnings:          effectiveBonus,
+      bonusChoreItems:             onVacation ? [] : bonusChoreItems,
+      missedMandatoryCount:        effectiveMissed,
+      onVacation,
+      paidLeave,
     },
     deductions: {
       tax,
@@ -443,14 +457,17 @@ export async function settlePayslip(payslipId) {
 
   // ── Update credit score ──────────────────────────────────────────
   let scoreDelta = 0
-  const pct    = ps.earnings.mandatoryCompletionPercent
-  const missed = ps.earnings.missedMandatoryCount ?? 0
-  if (pct >= 1.0) {
-    scoreDelta += 10                          // perfect week
-  } else if (pct < 0.5) {
-    scoreDelta -= 30                          // severe — nuclear penalty, no per-chore on top
-  } else {
-    scoreDelta -= missed * 2                  // 50–99%: -2 per missed mandatory instance
+  if (!ps.earnings.onVacation) {
+    // Chore-related credit changes only apply when not on vacation
+    const pct    = ps.earnings.mandatoryCompletionPercent
+    const missed = ps.earnings.missedMandatoryCount ?? 0
+    if (pct >= 1.0) {
+      scoreDelta += 10                        // perfect week
+    } else if (pct < 0.5) {
+      scoreDelta -= 30                        // severe — nuclear penalty, no per-chore on top
+    } else {
+      scoreDelta -= missed * 2               // 50–99%: -2 per missed mandatory instance
+    }
   }
 
   if (ps.deductions.loanRepayment > 0) {

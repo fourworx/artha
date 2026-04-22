@@ -1,11 +1,13 @@
 import { useNavigate } from 'react-router-dom'
-import { Zap, SlidersHorizontal, Gift, Landmark, Download, Users, HandCoins, QrCode, Receipt } from 'lucide-react'
+import { Zap, SlidersHorizontal, Gift, Landmark, Download, Users, HandCoins, QrCode, Receipt, Plane } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
+import { useFamily } from '../../context/FamilyContext'
 
 const items = [
   { icon: Users,            label: 'Family Members',    sub: 'Edit names, PINs, add children',        to: '/parent/members'      },
   { icon: HandCoins,        label: 'Loans',             sub: 'Active loans, interest, payoff',        to: '/parent/loans'        },
   { icon: QrCode,           label: 'Invite Code',       sub: "Set up a child's device with one code", to: '/parent/invite-code'  },
+  { icon: Plane,            label: 'Vacation Mode',     sub: 'Pause chores & scoring during holidays', to: '/parent/vacation'    },
   { icon: Zap,              label: 'Utility Logger',    sub: 'Log electricity, water charges',        to: '/parent/utilities'    },
   { icon: SlidersHorizontal,label: 'Economic Controls', sub: 'Tax, rent, interest, auto-save',        to: '/parent/economy'      },
   { icon: Gift,             label: 'Reward Manager',    sub: 'Add & price rewards',                   to: '/parent/rewards'      },
@@ -17,6 +19,8 @@ const items = [
 export default function More() {
   const navigate = useNavigate()
   const { logout } = useAuth()
+  const { children } = useFamily()
+  const anyOnVacation = children.some(c => c.config?.vacation?.active)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -38,6 +42,12 @@ export default function More() {
               <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{label}</p>
               <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{sub}</p>
             </div>
+            {to === '/parent/vacation' && anyOnVacation && (
+              <span className="text-xs font-mono px-2 py-0.5 rounded-full"
+                style={{ background: 'rgba(96,165,250,0.15)', color: '#60a5fa', border: '1px solid rgba(96,165,250,0.3)' }}>
+                ✈️ active
+              </span>
+            )}
             {soon && (
               <span className="text-xs font-mono px-2 py-0.5 rounded"
                 style={{ background: 'var(--bg-raised)', color: 'var(--text-dim)', border: '1px solid var(--border)' }}>

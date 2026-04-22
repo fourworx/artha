@@ -931,6 +931,14 @@ export async function updateMemberConfig(memberId, config) {
     .eq('id', memberId))
 }
 
+export async function setMemberVacation(memberId, vacation) {
+  // vacation: { active: bool, paidLeave: bool, startDate: string } | null
+  const member = await getMember(memberId)
+  if (!member) return
+  const newConfig = { ...(member.config ?? {}), vacation: vacation ?? null }
+  await updateMemberConfig(memberId, newConfig)
+}
+
 // ── Credit Score ─────────────────────────────────────────────────────────────
 
 export async function updateCreditScore(memberId, delta) {

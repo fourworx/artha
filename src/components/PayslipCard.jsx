@@ -117,6 +117,17 @@ export default function PayslipCard({ payslip, member, familyName }) {
 
       <Divider />
 
+      {/* Vacation banner */}
+      {earnings.onVacation && (
+        <div style={{
+          background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.25)',
+          borderRadius: '10px', padding: '8px 12px', textAlign: 'center',
+          fontFamily: 'JetBrains Mono, monospace', fontSize: '11px', color: '#60a5fa',
+        }}>
+          ✈️ {earnings.paidLeave ? 'Paid Leave — full salary, chores optional' : 'Unpaid Leave — no salary, no penalties'}
+        </div>
+      )}
+
       {/* Earnings */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
         <SectionLabel>EARNINGS</SectionLabel>
