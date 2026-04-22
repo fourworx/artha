@@ -95,10 +95,39 @@ export function calculatePayslip({
     .map(l => ({ logId: l.id, choreId: l.choreId, title: bonusChoreMap[l.choreId].title, value: bonusChoreMap[l.choreId].value }))
   const bonusChoreEarnings = bonusChoreItems.reduce((s, b) => s + b.value, 0)
 
+  // ── Missed mandatory chores (full period, for credit scoring at settle) ─
+  // "Done" = approved OR pending (child submitted; parent delay shouldn't penalise child)
+  const pStart = new Date(periodStart + 'T12:00:00')
+  const pEnd   = new Date(periodEnd   + 'T12:00:00')
+  const periodDays = Math.round((pEnd - pStart) / (1000 * 60 * 60 * 24)) + 1
+  let fullPeriodExpected = 0
+  let fullPeriodDone     = 0
+  for (let i = 0; i < periodDays; i++) {
+    const d = new Date(pStart)
+    d.setDate(pStart.getDate() + i)
+    const day     = d.getDay()
+    const dateStr = d.toISOString().split('T')[0]
+    for (const chore of mandatoryChores) {
+      let due = false
+      switch (chore.recurrence) {
+        case 'daily':   due = true; break
+        case 'weekday': due = day >= 1 && day <= 5; break
+        case 'weekend': due = day === 0 || day === 6; break
+        case 'weekly':  due = day === 1; break
+        case 'custom':  due = true; break
+      }
+      if (due) {
+        fullPeriodExpected++
+        if (choreLogs.some(l =>
+          l.choreId === chore.id && l.date === dateStr &&
+          (l.status === 'approved' || l.status === 'pending')
+        )) fullPeriodDone++
+      }
+    }
+  }
+  const missedMandatoryCount = Math.max(0, fullPeriodExpected - fullPeriodDone)
+
   // ── Bonus chore potential: max earnings if child did every bonus chore ─
-  const periodDays = Math.round(
-    (new Date(periodEnd + 'T12:00:00') - new Date(periodStart + 'T12:00:00')) / (1000 * 60 * 60 * 24)
-  ) + 1
   const bonusChoresAll = allChores.filter(c => c.type === 'bonus' && c.isActive && c.assignedTo.includes(member.id))
   const bonusPotential = bonusChoresAll.reduce((sum, c) => {
     let freq
@@ -183,6 +212,7 @@ export function calculatePayslip({
       streakBonus,
       bonusChoreEarnings,
       bonusChoreItems,
+      missedMandatoryCount,
     },
     deductions: {
       tax,
@@ -413,9 +443,15 @@ export async function settlePayslip(payslipId) {
 
   // ── Update credit score ──────────────────────────────────────────
   let scoreDelta = 0
-  const pct = ps.earnings.mandatoryCompletionPercent
-  if (pct >= 1.0)       scoreDelta += 10
-  else if (pct < 0.5)   scoreDelta -= 10
+  const pct    = ps.earnings.mandatoryCompletionPercent
+  const missed = ps.earnings.missedMandatoryCount ?? 0
+  if (pct >= 1.0) {
+    scoreDelta += 10                          // perfect week
+  } else if (pct < 0.5) {
+    scoreDelta -= 30                          // severe — nuclear penalty, no per-chore on top
+  } else {
+    scoreDelta -= missed * 2                  // 50–99%: -2 per missed mandatory instance
+  }
 
   if (ps.deductions.loanRepayment > 0) {
     if (ps.loanOutstandingAfter === 0) {
