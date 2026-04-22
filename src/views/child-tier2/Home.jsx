@@ -616,6 +616,21 @@ export default function Tier2Home() {
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-3">
+        {/* Vacation banner */}
+        {currentMember?.config?.vacation?.active && (
+          <div className="px-4 py-3 rounded-xl flex flex-col gap-1"
+            style={{ background: 'rgba(96,165,250,0.08)', border: '1px solid rgba(96,165,250,0.25)' }}>
+            <p className="text-sm font-mono font-semibold" style={{ color: '#60a5fa' }}>
+              ✈️ {currentMember.config.vacation.paidLeave ? 'Paid Leave' : 'Unpaid Leave'} this period
+            </p>
+            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+              {currentMember.config.vacation.paidLeave
+                ? 'Full salary incoming — chores are optional, enjoy your break!'
+                : 'No salary this period, but no penalties either. Your savings are still earning interest.'}
+            </p>
+          </div>
+        )}
+
         {/* Draft payslip banner */}
         {latestPayslip?.status === 'draft' && (
           <button

@@ -211,6 +211,19 @@ export default function Chores() {
         )}
       </div>
 
+      {/* Vacation notice */}
+      {currentMember?.config?.vacation?.active && (
+        <div className="px-4 py-2.5 flex items-center gap-2 shrink-0"
+          style={{ background: 'rgba(96,165,250,0.08)', borderBottom: '1px solid rgba(96,165,250,0.2)' }}>
+          <span className="text-sm">✈️</span>
+          <p className="text-xs font-mono" style={{ color: '#60a5fa' }}>
+            {currentMember.config.vacation.paidLeave
+              ? 'Paid leave — chores are optional this period'
+              : 'Unpaid leave — no penalties for skipping chores'}
+          </p>
+        </div>
+      )}
+
       {/* Content */}
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
         {loading ? (
