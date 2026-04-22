@@ -1,7 +1,57 @@
 ---
-name: Artha — Session 14 Handoff
-description: Full current state after sessions 1–14; use to resume in next session
+name: Artha — Session 15 Handoff
+description: Full current state after sessions 1–15; use to resume in next session
 type: project
+---
+
+## Session 15 completed (2026-04-22)
+
+### Features built / bugs fixed
+
+**Projected earnings widget — full redesign (child home)**
+- Was: showed net pay + "69% chores" (misleading — used `activeDates` denominator, only days with logs)
+- Now: shows **gross earned / gross potential** (salary-only denominator, bonus separate)
+- Mandatory chore % now iterates all calendar days in the period (Mon–Sun) as denominator — e.g. Wednesday with 3 days approved = 3/7 = 43%, honest and motivational
+- Streak bonus shown as separate amber line if active
+- **Bonus chores section** (earned / potential) shown only when bonus chores exist for the member
+- Interest line (savings + goals combined) shown when > 0
+- Footer: "If payslip ran right now"
+
+**Bonus chore potential tracking**
+- `calculatePayslip` now computes `bonusPotential` = sum of all active bonus chores × frequency multiplier (daily×7, weekday×5, weekend×2, weekly×1, custom×daysPerWeek)
+- `bonusPotential` added to the `calculatePayslip` return value
+- Stored as `bonus_potential` column in `payslips` table (column added to Supabase by user)
+- `mapPayslip` reads `bonus_potential ?? 0`; `addPayslip` writes it
+
+**PayslipCard bonus % summary**
+- After bonus chore items list, shows: "₹X of ₹Y potential (Z%)"
+- Only shown when `payslip.bonusPotential > 0`
+- `Row` component gained a `color` prop (custom hex colour, falls back through positive/negative/bold)
+
+**Philanthropy gold colour (#D4A017) — applied everywhere**
+- `PayslipCard` philanthropy allocation row: `positive` → `color='#D4A017'`
+- Parent Dashboard child card philanthropy tile
+- Parent Child Detail balance tile
+- Parent Child Detail donate section (bg, border, icon, text, button all gold)
+- `SpendingBreakdown` donut segment: `#4ade80` → `#D4A017`
+- Child Home savings sparkline stays blue; philanthropy sparkline → `#D4A017`
+
+**Bonus chore performance chart (parent child detail)**
+- Dual-Y-axis `ComposedChart` (Recharts) added to ChildDetail analytics section
+- Left Y-axis (₹): stacked bars — amber bottom = earned, muted top = left on table
+- Right Y-axis (%): amber line = capture rate per period
+- Only shown when settled payslips with `bonusPotential > 0` exist
+- Tooltip: earned / left on table / capture rate
+
+**Reward approval toast fixed (showing on every refresh)**
+- Used `useRef(true)` as `isFirstLoad` flag
+- On mount: seed all existing reward IDs silently, never toast
+- On subsequent `reloadCount` ticks: only toast genuinely new approvals
+
+**Savings colour updated**
+- Amount text: `var(--accent-blue)` → `#1E3A8A` (navy)
+- Sparkline: `#60a5fa` → `#1E3A8A`
+
 ---
 
 ## Session 14 completed (2026-04-22)
