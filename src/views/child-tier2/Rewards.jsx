@@ -79,35 +79,36 @@ function BuySheet({ reward, spending, onConfirm, onClose }) {
 }
 
 // ── Reward card ───────────────────────────────────────────────────────────────
-function RewardCard({ reward, spending, requestStatus, onBuy }) {
+function RewardCard({ reward, spending, pendingCount, onBuy }) {
   const fmt = useCurrency()
   const canAfford = spending >= reward.price
-  const isPending  = requestStatus === 'pending'
-  const isApproved = requestStatus === 'approved'
 
   return (
     <button
-      onClick={() => !isPending && !isApproved && onBuy(reward)}
-      className="flex flex-col items-center gap-2 p-4 rounded-xl transition-all active:scale-95 text-center"
+      onClick={() => onBuy(reward)}
+      className="flex flex-col items-center gap-2 p-4 rounded-xl transition-all active:scale-95 text-center relative"
       style={{
         background: 'var(--bg-surface)',
-        border: `1px solid ${isPending ? 'var(--border-bright)' : isApproved ? 'rgba(74,222,128,0.3)' : 'var(--border)'}`,
-        opacity: !canAfford && !isPending && !isApproved ? 0.5 : 1,
-        cursor: isPending || isApproved ? 'default' : 'pointer',
+        border: '1px solid var(--border)',
+        opacity: canAfford ? 1 : 0.5,
       }}>
+      {pendingCount > 0 && (
+        <span style={{
+          position: 'absolute', top: '8px', right: '8px',
+          background: 'var(--warning)', color: '#000',
+          fontFamily: 'JetBrains Mono, monospace', fontSize: '10px', fontWeight: 700,
+          borderRadius: '999px', padding: '1px 6px', lineHeight: '16px',
+        }}>
+          {pendingCount} pending
+        </span>
+      )}
       <span className="text-4xl">{reward.emoji}</span>
       <p className="text-xs font-mono font-semibold leading-tight" style={{ color: 'var(--text-primary)' }}>
         {reward.title}
       </p>
-      {isPending ? (
-        <span className="text-xs font-mono" style={{ color: 'var(--warning)' }}>⏳ Pending</span>
-      ) : isApproved ? (
-        <span className="text-xs font-mono" style={{ color: 'var(--positive)' }}>✓ Approved</span>
-      ) : (
-        <span className="text-xs font-mono font-bold" style={{ color: canAfford ? 'var(--positive)' : 'var(--text-dim)' }}>
-          {fmt(reward.price)}
-        </span>
-      )}
+      <span className="text-xs font-mono font-bold" style={{ color: canAfford ? 'var(--positive)' : 'var(--text-dim)' }}>
+        {fmt(reward.price)}
+      </span>
     </button>
   )
 }
@@ -133,11 +134,9 @@ export default function Rewards() {
 
   useEffect(() => { loadRequests() }, [loadRequests])
 
-  // Map rewardId → most recent request status
-  const requestMap = requests.reduce((acc, req) => {
-    if (!acc[req.rewardId] || req.requestedAt > acc[req.rewardId].requestedAt) {
-      acc[req.rewardId] = req
-    }
+  // Map rewardId → count of pending requests
+  const pendingCountMap = requests.reduce((acc, req) => {
+    if (req.status === 'pending') acc[req.rewardId] = (acc[req.rewardId] ?? 0) + 1
     return acc
   }, {})
 
@@ -202,7 +201,7 @@ export default function Rewards() {
               key={reward.id}
               reward={reward}
               spending={spending}
-              requestStatus={requestMap[reward.id]?.status}
+              pendingCount={pendingCountMap[reward.id] ?? 0}
               onBuy={setBuying}
             />
           ))}
