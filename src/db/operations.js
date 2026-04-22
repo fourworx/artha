@@ -105,7 +105,7 @@ function mapReward(row) {
     familyId: row.family_id,
     title:    row.title,
     category: row.category,
-    cost:     row.cost,
+    price:    row.cost,
     isActive: row.is_active,
     emoji:    row.emoji,
   }
@@ -401,7 +401,7 @@ export async function addReward(reward) {
     family_id: reward.familyId,
     title:     reward.title,
     category:  reward.category,
-    cost:      reward.cost,
+    cost:      reward.price,
     is_active: reward.isActive ?? true,
     emoji:     reward.emoji ?? null,
   }
@@ -412,7 +412,7 @@ export async function updateReward(id, changes) {
   const row = {}
   if ('title' in changes)    row.title     = changes.title
   if ('category' in changes) row.category  = changes.category
-  if ('cost' in changes)     row.cost      = changes.cost
+  if ('price' in changes)    row.cost      = changes.price
   if ('isActive' in changes) row.is_active = changes.isActive
   if ('emoji' in changes)    row.emoji     = changes.emoji
   throwIfError(await supabase.from('rewards').update(row).eq('id', id))
