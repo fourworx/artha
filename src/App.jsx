@@ -1,5 +1,5 @@
 import { BrowserRouter, Routes, Route, Navigate, Outlet } from 'react-router-dom'
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import { FamilyProvider, useFamily } from './context/FamilyContext'
 import { getPendingLogsForMembers, getPendingMemberRequests, getPendingRewardRequests, getRewardRequests, getDeviceClaim, getOrCreateDeviceId, checkFamilyExists, getLatestPayslip } from './db/operations'
@@ -185,6 +185,7 @@ function Tier2Shell() {
   const [hasDraftPayslip, setHasDraftPayslip] = useState(false)
   const [rewardToast, setRewardToast] = useState(null) // { title }
   const seenRewardIds = useState(() => new Set())[0]
+  const isFirstLoad = useRef(true)
 
   const checkDraft = useCallback(async () => {
     if (!currentMember) return
@@ -198,15 +199,19 @@ function Tier2Shell() {
     refreshMember()
     checkDraft()
     getRewardRequests(currentMember.id).then(reqs => {
+      if (isFirstLoad.current) {
+        // On mount: seed all existing IDs silently — never toast pre-existing approvals
+        reqs.forEach(r => seenRewardIds.add(r.id))
+        isFirstLoad.current = false
+        return
+      }
       const approved = reqs.filter(r => r.status === 'approved' && !seenRewardIds.has(r.id))
       if (approved.length > 0) {
         setRewardToast({ title: approved[0].rewardTitle })
         approved.forEach(r => seenRewardIds.add(r.id))
         setTimeout(() => setRewardToast(null), 4000)
-      } else {
-        // Seed seen set on first load so we only toast future approvals
-        reqs.forEach(r => seenRewardIds.add(r.id))
       }
+      reqs.forEach(r => seenRewardIds.add(r.id))
     }).catch(() => {})
   }, [reloadCount]) // eslint-disable-line react-hooks/exhaustive-deps
 
