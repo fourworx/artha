@@ -361,7 +361,7 @@ function SpendingSheet({ memberId, onClose, fmt }) {
                   <p className="text-xs font-mono font-semibold truncate" style={{ color: 'var(--text-primary)' }}>
                     {tx.description || meta.label}
                   </p>
-                  <p className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>{tx.date}</p>
+                  <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>{tx.date}</p>
                 </div>
                 <span className="text-xs font-mono font-semibold" style={{ color: 'var(--negative)' }}>
                   −{fmt(Math.abs(tx.amount))}
