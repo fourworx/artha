@@ -487,10 +487,9 @@ export default function Tier2Home() {
       }
       const mandatoryPct = totalExpected > 0 ? Math.round(totalApproved / totalExpected * 100) : 0
 
-      // ── Potential gross: full salary + streak bonus + all bonus chore potential ──
+      // ── Potential gross: full salary + streak bonus (bonus chores shown separately) ──
       const potentialGross = currentMember.baseSalary
         + Math.round(currentMember.baseSalary * calc.earnings.streakBonusPct)
-        + (calc.bonusPotential ?? 0)
 
       setProjected({
         earnedGross:    calc.gross,
