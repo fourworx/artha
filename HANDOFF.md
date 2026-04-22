@@ -1,7 +1,43 @@
 ---
-name: Artha — Session 15 Handoff
-description: Full current state after sessions 1–15; use to resume in next session
+name: Artha — Session 16 Handoff
+description: Full current state after sessions 1–16; use to resume in next session
 type: project
+---
+
+## Session 16 completed (2026-04-22)
+
+### Features built / bugs fixed
+
+**Credit score rework at payslip settle**
+- Was: `−10` for completion < 50%, no per-chore penalty
+- Now:
+  - 100% completion → `+10` (unchanged)
+  - 50–99% completion → `−2` per missed mandatory chore instance (no log at all, or rejected)
+  - < 50% completion → `−30` flat ("nuclear" penalty, no per-instance on top)
+- "Done" for penalty purposes = `approved` OR `pending` (parent delay doesn't penalise child)
+- `missedMandatoryCount` added to `calculatePayslip` return (full-period loop, same as widget)
+
+**Vacation mode**
+- New screen: More → Vacation Mode (`/parent/vacation`)
+- Per-child toggle (ON/OFF) + Paid/Unpaid leave selector
+- Bulk actions when multiple children: "All on paid leave" / "All on unpaid leave" / "Cancel all"
+- "✈️ active" badge on the Vacation Mode item in More list when any child is on vacation
+- Stored as `vacation: { active, paidLeave, startDate }` in `member.config`
+- `setMemberVacation(memberId, vacation)` helper in operations.js
+
+**Vacation payslip engine logic** (`calculatePayslip`):
+- Paid leave: `adjustedSalary = baseSalary`, streak/bonus = 0, normal deductions on full salary, credit unaffected
+- Unpaid leave: gross = 0, rent/utilities waived, savings interest still accrues, loan interest still accrues, credit unaffected
+- `onVacation` and `paidLeave` saved to `earnings` in payslip for historical accuracy
+- `settlePayslip`: chore-related credit changes skipped entirely when `ps.earnings.onVacation === true`
+- PayslipCard shows blue ✈️ banner (paid or unpaid wording)
+
+**Vacation visible to child**
+- Home screen: blue banner at top of feed explaining paid vs unpaid leave
+- Chores screen: slim blue notice bar below header — "chores optional" or "no penalties"
+
+**Future feature logged in handoff**: sibling chore pickup — if Child A is on vacation, Child B can volunteer to do Child A's chores and earn extra. To explore when distribution phase begins.
+
 ---
 
 ## Session 15 completed (2026-04-22)
