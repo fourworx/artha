@@ -47,14 +47,18 @@ export default function Savings() {
     .filter(p => p.status === 'settled')
     .sort((a, b) => a.periodEnd.localeCompare(b.periodEnd))
 
-  const historyData = settledPayslips.slice(-8).map(p => {
-    const b = p.balancesAfter ?? {}
-    const goalsTotal = (b.subGoals ?? []).reduce((s, g) => s + (g.balance ?? 0), 0)
-    return {
-      date: shortDate(p.periodEnd),
-      savings: (b.savings ?? 0) + goalsTotal,
-    }
-  })
+  const historyData = [
+    ...settledPayslips.slice(-7).map(p => {
+      const b = p.balancesAfter ?? {}
+      const goalsTotal = (b.subGoals ?? []).reduce((s, g) => s + (g.balance ?? 0), 0)
+      return {
+        date: shortDate(p.periodEnd),
+        savings: (b.savings ?? 0) + goalsTotal,
+      }
+    }),
+    // Always append the current live balance as the final point
+    { date: 'Now', savings: totalSavings },
+  ]
 
   // Projection from totalSavings as base
   const projectionData = projectSavingsGrowth(totalSavings, weeklyDeposit, interestRate, 8)
