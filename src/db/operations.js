@@ -953,6 +953,26 @@ export async function approveSpendingWithdrawal(requestId, memberId, amount, des
   await resolveMemberRequest(requestId, 'approved')
 }
 
+// ── Savings withdrawal (parent-approved, savings → spending wallet) ───────────
+export async function approveSavingsWithdrawal(requestId, memberId, amount) {
+  const member = await getMember(memberId)
+  if (!member) throw new Error('Member not found')
+  const savings = member.accounts.savings ?? 0
+  if (amount > savings) throw new Error(`Insufficient savings (${savings} available)`)
+  await updateMemberAccounts(memberId, {
+    ...member.accounts,
+    savings:  savings - amount,
+    spending: (member.accounts.spending ?? 0) + amount,
+  })
+  await addTransaction({
+    id: crypto.randomUUID(), memberId,
+    type: 'withdrawal', amount: -amount,
+    description: 'Savings withdrawal to wallet',
+    date: today(), relatedId: null,
+  })
+  await resolveMemberRequest(requestId, 'approved')
+}
+
 // ── Per-child economic config ─────────────────────────────────────────────────
 
 export async function updateMemberConfig(memberId, config) {

@@ -179,6 +179,9 @@ export default function PayslipCard({ payslip, member, familyName }) {
         {deductions.loanRepayment > 0 && (
           <Row label="Loan Repayment" value={fmt(-deductions.loanRepayment)} negative />
         )}
+        {(deductions.interestTax ?? 0) > 0 && (
+          <Row label={`Interest tax (${+(((deductions.taxRate ?? 0)) * 100).toFixed(2)}%)`} value={fmt(-deductions.interestTax)} negative />
+        )}
         <Divider char="·" />
         <Row label="TOTAL DEDUCTIONS" value={fmt(-totalDeductions)} bold negative={totalDeductions > 0} />
       </div>

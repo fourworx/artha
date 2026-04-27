@@ -1,12 +1,12 @@
 import { useState, useEffect, useCallback } from 'react'
-import { Check, X, RefreshCw, Gift, Heart, Target } from 'lucide-react'
+import { Check, X, RefreshCw, Gift, Heart, Target, Landmark, Banknote } from 'lucide-react'
 import { useFamily } from '../../context/FamilyContext'
 import {
   getPendingLogsForMembers, approveChoreLog, rejectChoreLog,
   approveBonusChoreLog, approveTier1ChoreLog,
   getPendingRewardRequests, approveRewardRequest, rejectRewardRequest,
   updateCreditScore,
-  getPendingMemberRequests, approveDonation, approveSubGoalWithdrawal, approveSpendingWithdrawal, resolveMemberRequest,
+  getPendingMemberRequests, approveDonation, approveSubGoalWithdrawal, approveSpendingWithdrawal, approveSavingsWithdrawal, resolveMemberRequest,
 } from '../../db/operations'
 import { displayDate } from '../../utils/dates'
 import { useCurrency } from '../../context/FamilyContext'
@@ -138,6 +138,8 @@ export default function ApproveChores() {
         await approveSubGoalWithdrawal(req.id, req.memberId, req.amount, req.metadata ?? {})
       } else if (req.type === 'cash_withdrawal') {
         await approveSpendingWithdrawal(req.id, req.memberId, req.amount, req.metadata?.destination ?? 'cash')
+      } else if (req.type === 'savings_withdrawal') {
+        await approveSavingsWithdrawal(req.id, req.memberId, req.amount)
       }
       setMemberRequests(prev => prev.filter(r => r.id !== req.id))
       await reload()
@@ -340,12 +342,19 @@ export default function ApproveChores() {
                 </div>
                 {requests.map(req => {
                   const isActing   = acting === req.id
-                  const isDonation = req.type === 'donation'
-                  const meta       = req.metadata ?? {}
+                  const isDonation         = req.type === 'donation'
+                  const isSubGoal          = req.type === 'subgoal_withdrawal'
+                  const isCashOut          = req.type === 'cash_withdrawal'
+                  const isSavingsWithdraw  = req.type === 'savings_withdrawal'
+                  const meta               = req.metadata ?? {}
 
                   // Balance check
                   const balance = isDonation
                     ? (member.accounts?.philanthropy ?? 0)
+                    : isSavingsWithdraw
+                    ? (member.accounts?.savings ?? 0)
+                    : isCashOut
+                    ? (member.accounts?.spending ?? 0)
                     : (() => {
                         const sg = (member.accounts?.subGoals ?? []).find(s => s.id === meta.subGoalId)
                         return sg?.balance ?? 0
@@ -355,17 +364,29 @@ export default function ApproveChores() {
                   // Label lines
                   const title = isDonation
                     ? `Donate to ${req.description || 'charity'}`
+                    : isSavingsWithdraw
+                    ? 'Withdraw from savings → wallet'
+                    : isCashOut
+                    ? `Wallet withdrawal — ${meta.destination === 'bank' ? 'Bank transfer' : 'Physical cash'}`
                     : `Withdraw from "${meta.subGoalName ?? 'goal'}"`
                   const subtitle = isDonation
                     ? `philanthropy: ${fmt(balance)}`
+                    : isSavingsWithdraw
+                    ? `savings bal: ${fmt(balance)}${meta.note ? ' · ' + meta.note : ''}`
+                    : isCashOut
+                    ? `wallet: ${fmt(balance)}${meta.note ? ' · ' + meta.note : ''}`
                     : `→ ${meta.destination ?? 'spending'} · goal bal: ${fmt(balance)}${meta.deleteGoal ? ' · delete goal' : ''}`
 
                   return (
                     <div key={req.id} className="flex items-center gap-3 p-3 rounded-xl"
                       style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', opacity: isActing ? 0.5 : 1 }}>
                       {isDonation
-                        ? <Heart size={18} style={{ color: 'var(--positive)', flexShrink: 0 }} />
-                        : <Target size={18} style={{ color: 'var(--accent-blue)', flexShrink: 0 }} />
+                        ? <Heart     size={18} style={{ color: 'var(--positive)',   flexShrink: 0 }} />
+                        : isSavingsWithdraw
+                        ? <Landmark  size={18} style={{ color: '#60a5fa',           flexShrink: 0 }} />
+                        : isCashOut
+                        ? <Banknote  size={18} style={{ color: 'var(--warning)',    flexShrink: 0 }} />
+                        : <Target    size={18} style={{ color: 'var(--accent-blue)', flexShrink: 0 }} />
                       }
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-mono truncate" style={{ color: 'var(--text-primary)' }}>

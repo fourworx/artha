@@ -2,9 +2,11 @@ import { useState, useEffect } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../../context/AuthContext'
 import { useFamily, useCurrency } from '../../context/FamilyContext'
-import { getPayslips } from '../../db/operations'
-import { shortDate } from '../../utils/dates'
+import { getPayslips, addMemberRequest } from '../../db/operations'
+import { shortDate, today } from '../../utils/dates'
 import { projectSavingsGrowth } from '../../engine/interest'
+import { X } from 'lucide-react'
+import { FAMILY_ID } from '../../utils/constants'
 
 const CustomTooltip = ({ active, payload }) => {
   const fmt = useCurrency()
@@ -17,12 +19,139 @@ const CustomTooltip = ({ active, payload }) => {
   )
 }
 
+// ── Savings withdrawal sheet ──────────────────────────────────────────────────
+function SavingsWithdrawSheet({ savings, memberId, onClose, fmt }) {
+  const [amount,  setAmount]  = useState('')
+  const [note,    setNote]    = useState('')
+  const [saving,  setSaving]  = useState(false)
+  const [done,    setDone]    = useState(false)
+  const [error,   setError]   = useState('')
+
+  const max    = savings
+  const parsed = Math.min(Number(amount) || 0, max)
+
+  const handleSubmit = async () => {
+    if (!parsed || parsed <= 0) { setError('Enter a valid amount'); return }
+    setSaving(true); setError('')
+    try {
+      await addMemberRequest({
+        id: crypto.randomUUID(),
+        familyId: FAMILY_ID,
+        memberId,
+        type: 'savings_withdrawal',
+        amount: parsed,
+        description: `Savings withdrawal to wallet${note.trim() ? ': ' + note.trim() : ''}`,
+        metadata: { note: note.trim() },
+        requestedAt: Date.now(),
+      })
+      setDone(true)
+    } catch (e) { setError(e.message) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end"
+      style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="rounded-t-2xl flex flex-col"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full" style={{ background: 'var(--border-bright)' }} />
+        </div>
+        <div className="flex items-center justify-between px-4 py-3"
+          style={{ borderBottom: '1px solid var(--border)' }}>
+          <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Withdraw from Savings
+          </span>
+          <button onClick={onClose} style={{ color: 'var(--text-muted)', background: 'none', border: 'none' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {done ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-3 px-4">
+            <span className="text-5xl">📤</span>
+            <p className="text-sm font-mono font-semibold" style={{ color: 'var(--positive)' }}>Request sent!</p>
+            <p className="text-xs font-mono text-center" style={{ color: 'var(--text-muted)' }}>
+              Your parent will approve and move the funds to your wallet.
+            </p>
+            <button onClick={onClose}
+              className="w-full py-3 rounded-xl text-sm font-mono font-semibold mt-2"
+              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+              Close
+            </button>
+          </div>
+        ) : (
+          <div className="px-4 py-4 flex flex-col gap-4">
+            <div className="p-2.5 rounded-lg" style={{ background: 'var(--bg-raised)' }}>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SAVINGS BALANCE</p>
+              <p className="text-base font-mono font-bold mt-0.5" style={{ color: '#60a5fa' }}>{fmt(max)}</p>
+            </div>
+
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2 flex-wrap">
+                {[50, 100, 250, 500].filter(v => v <= max).map(v => (
+                  <button key={v} onClick={() => setAmount(String(v))}
+                    className="flex-1 py-2 rounded-lg text-xs font-mono font-semibold transition-all"
+                    style={{
+                      background: amount === String(v) ? 'rgba(96,165,250,0.12)' : 'var(--bg-raised)',
+                      border: `1px solid ${amount === String(v) ? 'rgba(96,165,250,0.3)' : 'var(--border)'}`,
+                      color: amount === String(v) ? '#60a5fa' : 'var(--text-muted)',
+                    }}>{fmt(v)}</button>
+                ))}
+              </div>
+              <input type="number" min={1} max={max} value={amount}
+                onChange={e => setAmount(e.target.value)}
+                placeholder="Custom amount"
+                className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+              />
+            </div>
+
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>REASON (optional)</label>
+              <input value={note} onChange={e => setNote(e.target.value)}
+                placeholder="e.g. Buying a gift"
+                className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+              />
+            </div>
+
+            {parsed > 0 && (
+              <div className="flex items-center justify-between px-3 py-2 rounded-lg"
+                style={{ background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.2)' }}>
+                <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Savings after approval</span>
+                <span className="text-xs font-mono font-semibold" style={{ color: '#60a5fa' }}>
+                  {fmt(max - parsed)} remaining
+                </span>
+              </div>
+            )}
+
+            {error && <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{error}</p>}
+
+            <button onClick={handleSubmit} disabled={saving || !parsed}
+              className="w-full py-3 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
+              style={{
+                background: saving || !parsed ? 'var(--border)' : 'rgba(96,165,250,0.15)',
+                border: '1px solid rgba(96,165,250,0.3)',
+                color: saving || !parsed ? 'var(--text-dim)' : '#60a5fa',
+              }}>
+              {saving ? 'Sending...' : `Request ${parsed ? fmt(parsed) : '—'} withdrawal`}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function Savings() {
   const { currentMember } = useAuth()
   const { family } = useFamily()
   const fmt = useCurrency()
-  const [payslips, setPayslips] = useState([])
-  const [loading, setLoading]   = useState(true)
+  const [payslips,      setPayslips]      = useState([])
+  const [loading,       setLoading]       = useState(true)
+  const [showWithdraw,  setShowWithdraw]  = useState(false)
 
   useEffect(() => {
     if (!currentMember) return
@@ -75,17 +204,28 @@ export default function Savings() {
       {/* Header */}
       <div className="px-4 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
         <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>MY SAVINGS</p>
-        <p className="text-3xl font-mono font-bold mt-0.5" style={{ color: 'var(--accent-blue)' }}>
-          {fmt(totalSavings)}
-        </p>
-        {subGoals.length > 0 && (
-          <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>
-            {fmt(savings)} account + {fmt(subGoalTotal)} in {subGoals.length} goal{subGoals.length > 1 ? 's' : ''}
-          </p>
-        )}
-        <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
-          {+(interestRate * 100).toFixed(2)}% interest/period · auto-save {+(autoSave * 100).toFixed(2)}% of net pay
-        </p>
+        <div className="flex items-end justify-between mt-0.5">
+          <div>
+            <p className="text-3xl font-mono font-bold" style={{ color: 'var(--accent-blue)' }}>
+              {fmt(totalSavings)}
+            </p>
+            {subGoals.length > 0 && (
+              <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>
+                {fmt(savings)} account + {fmt(subGoalTotal)} in {subGoals.length} goal{subGoals.length > 1 ? 's' : ''}
+              </p>
+            )}
+            <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
+              {+(interestRate * 100).toFixed(2)}% interest/period · auto-save {+(autoSave * 100).toFixed(2)}% of net pay
+            </p>
+          </div>
+          {savings > 0 && (
+            <button onClick={() => setShowWithdraw(true)}
+              className="px-3 py-1.5 rounded-lg text-xs font-mono font-semibold transition-all active:scale-95 shrink-0"
+              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-bright)', color: 'var(--text-muted)' }}>
+              Withdraw
+            </button>
+          )}
+        </div>
       </div>
 
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-5">
@@ -219,6 +359,15 @@ export default function Savings() {
           </p>
         )}
       </div>
+
+      {showWithdraw && (
+        <SavingsWithdrawSheet
+          savings={savings}
+          memberId={currentMember.id}
+          fmt={fmt}
+          onClose={() => setShowWithdraw(false)}
+        />
+      )}
     </div>
   )
 }

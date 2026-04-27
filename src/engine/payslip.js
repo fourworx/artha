@@ -208,8 +208,12 @@ export function calculatePayslip({
     sum + sg.balance - subGoals[i].balance, 0
   )
 
-  // ── 9. New balances ──────────────────────────────────────────────
-  const newSavings      = member.accounts.savings + savingsAlloc + interestEarned
+  // ── 9. Interest tax — applied at same rate as salary tax, deducted from savings ─
+  const totalInterestEarned = interestEarned + subGoalInterestEarned
+  const interestTax     = roundRupees(totalInterestEarned * config.taxRate)
+
+  // ── 10. New balances ─────────────────────────────────────────────
+  const newSavings      = member.accounts.savings + savingsAlloc + interestEarned - interestTax
   const newSpending     = member.accounts.spending + spendingAfterLoan
   const newPhilanthropy = philanthropyBalance + philanthropyAlloc   // no interest
 
@@ -238,6 +242,7 @@ export function calculatePayslip({
       loanRepayment,
       loanInterest,
       loanInterestRate,
+      interestTax,
       emi: 0,
     },
     gross,
@@ -369,15 +374,16 @@ export async function settlePayslip(payslipId) {
     loan:         ps.balancesAfter.loan,
   })
 
-  // ── Update tax fund ──────────────────────────────────────────────
-  if (ps.deductions.tax > 0) {
-    const newTaxBalance = (family.taxFundBalance ?? 0) + ps.deductions.tax
+  // ── Update tax fund (salary tax + interest tax) ─────────────────
+  const totalTaxCredit = (ps.deductions.tax ?? 0) + (ps.deductions.interestTax ?? 0)
+  if (totalTaxCredit > 0) {
+    const newTaxBalance = (family.taxFundBalance ?? 0) + totalTaxCredit
     const newTaxHistory = [
       ...(family.taxFundHistory ?? []),
       {
         id: crypto.randomUUID(),
         memberId: ps.memberId,
-        amount: ps.deductions.tax,
+        amount: totalTaxCredit,
         type: 'credit',
         description: `Tax — ${member.name} (${ps.periodEnd})`,
         date: ps.periodEnd,
@@ -408,6 +414,11 @@ export async function settlePayslip(payslipId) {
       type: 'tax',
       amount: -ps.deductions.tax,
       description: `Tax (${+(family.config.taxRate * 100).toFixed(2)}%)`,
+    },
+    (ps.deductions.interestTax ?? 0) > 0 && {
+      type: 'tax',
+      amount: -ps.deductions.interestTax,
+      description: `Interest tax (${+(family.config.taxRate * 100).toFixed(2)}%)`,
     },
     ps.deductions.rent > 0 && {
       type: 'rent',
