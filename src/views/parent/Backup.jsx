@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { Download, Upload, AlertTriangle, CheckCircle, Cloud, FlaskConical } from 'lucide-react'
 import { addDays, subDays, parseISO, format, getDay } from 'date-fns'
-import { exportAllData, importAllData, getFamily, getMembers, getChores } from '../../db/operations'
+import { exportAllData, importAllData, getFamily, getMembers, getChores, getPayslipForPeriod } from '../../db/operations'
 import { migrateToSupabase } from '../../db/migrate'
 import { runPayslip, settlePayslip } from '../../engine/payslip'
 import { supabase } from '../../db/supabase'
@@ -127,6 +127,20 @@ export default function Backup() {
               })
             }
           }
+
+          // Skip if payslip already exists for this period
+          const existing = await getPayslipForPeriod(member.id, periodEnd)
+          if (existing) {
+            setGenProgress(`Period ${n}/${genPeriods}: skipping ${member.name} (payslip exists)`)
+            continue
+          }
+
+          // Delete any existing chore_logs for this period (from a partial previous run)
+          await supabase.from('chore_logs')
+            .delete()
+            .eq('member_id', member.id)
+            .gte('date', periodStart)
+            .lte('date', periodEnd)
 
           // Insert all logs
           if (logs.length > 0) {
