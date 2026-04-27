@@ -17,26 +17,45 @@ function slicePath(cx, cy, r, startDeg, endDeg) {
 }
 
 export default function SpendingBreakdown({ transactions = [] }) {
-  // Aggregate by category
   const cats = {
-    rent:       { label: 'Rent',       color: '#f87171', value: 0 },
-    tax:        { label: 'Tax',        color: '#fb923c', value: 0 },
-    savings:    { label: 'Savings',    color: '#60a5fa', value: 0 },
-    philanthropy:{ label: 'Philanthropy', color: '#D4A017', value: 0 },
-    reward:     { label: 'Rewards',    color: '#c084fc', value: 0 },
-    loan_repay: { label: 'Loan repay', color: '#fbbf24', value: 0 },
-    spending:   { label: 'Spending',   color: '#a3a3a3', value: 0 },
+    tax:           { label: 'Tax',           color: '#fb923c', value: 0 },
+    rent:          { label: 'Rent',          color: '#f87171', value: 0 },
+    utility:       { label: 'Utilities',     color: '#f97316', value: 0 },
+    savings:       { label: 'Savings',       color: '#60a5fa', value: 0 },
+    goals:         { label: 'Goals',         color: '#818cf8', value: 0 },
+    philanthropy:  { label: 'Philanthropy',  color: '#D4A017', value: 0 },
+    loan_repay:    { label: 'Loan principal',color: '#fbbf24', value: 0 },
+    loan_interest: { label: 'Loan interest', color: '#d97706', value: 0 },
+    reward:        { label: 'Rewards',       color: '#c084fc', value: 0 },
   }
 
   transactions.forEach(tx => {
     const type = tx.type
     const amt  = Math.abs(tx.amount)
-    if (cats[type])       cats[type].value += amt
-    else if (type === 'deposit' && tx.description?.toLowerCase().includes('savings'))
-      cats.savings.value += amt
-    else if (type === 'deposit' && tx.description?.toLowerCase().includes('philanthropy'))
-      cats.philanthropy.value += amt
-    // ignore credits (salary, bonus, interest, loan_credit — they're income not outgo)
+    const desc = tx.description?.toLowerCase() ?? ''
+
+    switch (type) {
+      case 'tax':
+        cats.tax.value += amt; break
+      case 'rent':
+        cats.rent.value += amt; break
+      case 'utility':
+        cats.utility.value += amt; break
+      case 'loan_repay':
+      case 'loan_cleared':
+        cats.loan_repay.value += amt; break
+      case 'loan_interest':
+        cats.loan_interest.value += amt; break
+      case 'reward':
+        cats.reward.value += amt; break
+      case 'deposit':
+        if (desc.includes('philanthropy'))       cats.philanthropy.value += amt
+        else if (desc.includes('goal deposit'))  cats.goals.value += amt
+        else if (desc.includes('savings'))       cats.savings.value += amt
+        break
+      // salary, bonus, interest, loan_credit, parent_bonus, withdrawal = income / not outflows
+      default: break
+    }
   })
 
   const items = Object.values(cats).filter(c => c.value > 0)
