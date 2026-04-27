@@ -1,9 +1,13 @@
 import { useState, useRef } from 'react'
-import { Download, Upload, AlertTriangle, CheckCircle, Cloud } from 'lucide-react'
-import { exportAllData, importAllData } from '../../db/operations'
+import { Download, Upload, AlertTriangle, CheckCircle, Cloud, FlaskConical } from 'lucide-react'
+import { addDays, subDays, parseISO, format, getDay } from 'date-fns'
+import { exportAllData, importAllData, getFamily, getMembers, getChores } from '../../db/operations'
 import { migrateToSupabase } from '../../db/migrate'
+import { runPayslip, settlePayslip } from '../../engine/payslip'
+import { supabase } from '../../db/supabase'
 import { useFamily } from '../../context/FamilyContext'
 import { FAMILY_ID } from '../../utils/constants'
+import { currentPeriodStart } from '../../utils/dates'
 
 export default function Backup() {
   const { reload } = useFamily()
@@ -14,6 +18,9 @@ export default function Backup() {
   const [migrating,  setMigrating]  = useState(false)
   const [pendingData, setPendingData] = useState(null) // parsed import payload
   const [status, setStatus]     = useState(null)       // { type: 'ok'|'error', msg }
+  const [generating, setGenerating] = useState(false)
+  const [genPeriods, setGenPeriods] = useState(4)
+  const [genProgress, setGenProgress] = useState('')
 
   // ── Migrate from local device → Supabase ────────────────────────────────────
   const handleMigrate = async () => {
@@ -27,6 +34,121 @@ export default function Backup() {
       setStatus({ type: 'error', msg: `Migration failed: ${e.message}` })
     }
     setMigrating(false)
+  }
+
+  // ── Generate test history ────────────────────────────────────────────────────
+  const handleGenerate = async () => {
+    setGenerating(true)
+    setStatus(null)
+    setGenProgress('Loading family data...')
+    try {
+      const [family, allMembers, allChores] = await Promise.all([
+        getFamily(FAMILY_ID),
+        getMembers(FAMILY_ID),
+        getChores(FAMILY_ID),
+      ])
+      const tier2 = allMembers.filter(m => m.role === 'child' && m.tier >= 2)
+      if (!tier2.length) throw new Error('No Tier 2 children found.')
+
+      const mandatoryChores = allChores.filter(c => c.isActive && c.type === 'mandatory')
+      const bonusChores     = allChores.filter(c => c.isActive && c.type === 'bonus')
+
+      // Derive payday DOW from family config (default Saturday=6)
+      const paydayDow = family.config?.paydayDow ?? 6
+
+      // Current period start as ISO date
+      const cpStart = currentPeriodStart(family.config)
+
+      // isDueOnDay: returns true if chore is due on given Date object
+      function isDueOnDay(chore, date) {
+        const dow = getDay(date)
+        switch (chore.recurrence) {
+          case 'daily':   return true
+          case 'weekday': return dow >= 1 && dow <= 5
+          case 'weekend': return dow === 0 || dow === 6
+          case 'weekly':  return dow === 1
+          case 'custom':  return true
+          default:        return false
+        }
+      }
+
+      let totalPayslips = 0
+
+      for (let n = 1; n <= genPeriods; n++) {
+        const periodStart = format(subDays(parseISO(cpStart), n * 7), 'yyyy-MM-dd')
+        const periodEnd   = format(addDays(parseISO(periodStart), 6), 'yyyy-MM-dd')
+
+        setGenProgress(`Period ${n}/${genPeriods}: ${periodStart} → ${periodEnd}`)
+
+        for (const member of tier2) {
+          // Random completion rate 70–100%
+          const completionRate = 0.70 + Math.random() * 0.30
+
+          // Build approved chore_log rows for mandatory chores
+          const logs = []
+          let day = parseISO(periodStart)
+          for (let d = 0; d < 7; d++) {
+            const dateStr = format(day, 'yyyy-MM-dd')
+            const memberMandatory = mandatoryChores.filter(c =>
+              c.assignedTo.includes(member.id) && isDueOnDay(c, day)
+            )
+            for (const chore of memberMandatory) {
+              if (Math.random() < completionRate) {
+                logs.push({
+                  id:           crypto.randomUUID(),
+                  chore_id:     chore.id,
+                  member_id:    member.id,
+                  date:         dateStr,
+                  status:       'approved',
+                  completed_at: new Date(dateStr).getTime(),
+                  approved_at:  new Date(dateStr).getTime() + 3600000,
+                })
+              }
+            }
+            day = addDays(day, 1)
+          }
+
+          // Randomly add some bonus chores (0–all of them, on random days)
+          const memberBonus = bonusChores.filter(c =>
+            c.assignedTo.length === 0 || c.assignedTo.includes(member.id)
+          )
+          for (const chore of memberBonus) {
+            if (Math.random() < 0.5) { // 50% chance each bonus chore gets done
+              const randomDayOffset = Math.floor(Math.random() * 7)
+              const bonusDay = format(addDays(parseISO(periodStart), randomDayOffset), 'yyyy-MM-dd')
+              logs.push({
+                id:           crypto.randomUUID(),
+                chore_id:     chore.id,
+                member_id:    member.id,
+                date:         bonusDay,
+                status:       'approved',
+                completed_at: new Date(bonusDay).getTime(),
+                approved_at:  new Date(bonusDay).getTime() + 3600000,
+              })
+            }
+          }
+
+          // Insert all logs
+          if (logs.length > 0) {
+            const { error: logErr } = await supabase.from('chore_logs').insert(logs)
+            if (logErr) throw new Error(`chore_logs insert: ${logErr.message}`)
+          }
+
+          // Run payslip for this period
+          const ps = await runPayslip(member.id, { start: periodStart, end: periodEnd })
+          await settlePayslip(ps.id)
+          totalPayslips++
+        }
+      }
+
+      await reload()
+      setGenProgress('')
+      setStatus({ type: 'ok', msg: `Generated ${totalPayslips} payslips across ${genPeriods} past period(s).` })
+    } catch (e) {
+      setGenProgress('')
+      setStatus({ type: 'error', msg: `Generation failed: ${e.message}` })
+    }
+    setGenerating(false)
   }
 
   // ── Export ──────────────────────────────────────────────────────────────────
@@ -258,6 +380,59 @@ export default function Backup() {
             </div>
           </div>
         )}
+
+        {/* Generate test history — dev tool */}
+        <div className="flex flex-col gap-3 p-4 rounded-xl"
+          style={{ background: 'var(--bg-surface)', border: '1px solid rgba(168,85,247,0.3)' }}>
+          <div className="flex items-start gap-3">
+            <FlaskConical size={18} style={{ color: '#a855f7', flexShrink: 0, marginTop: 2 }} />
+            <div className="flex flex-col gap-1">
+              <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+                Generate Test History
+              </p>
+              <p className="text-xs font-mono leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                Backdates random chore completions + settled payslips for all Tier 2 children.
+                70–100% completion rate, random bonus chores. Dev-only — remove before prod.
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-3">
+            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Periods:</p>
+            {[1, 2, 4, 8].map(n => (
+              <button
+                key={n}
+                onClick={() => setGenPeriods(n)}
+                className="px-3 py-1 rounded-lg text-xs font-mono font-semibold transition-all"
+                style={{
+                  background: genPeriods === n ? 'rgba(168,85,247,0.2)' : 'var(--bg-raised)',
+                  border: `1px solid ${genPeriods === n ? 'rgba(168,85,247,0.5)' : 'var(--border)'}`,
+                  color: genPeriods === n ? '#a855f7' : 'var(--text-muted)',
+                }}>
+                {n}
+              </button>
+            ))}
+          </div>
+
+          {genProgress ? (
+            <p className="text-xs font-mono" style={{ color: '#a855f7' }}>
+              ⏳ {genProgress}
+            </p>
+          ) : null}
+
+          <button
+            onClick={handleGenerate}
+            disabled={generating}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
+            style={{
+              background: generating ? 'var(--bg-raised)' : 'rgba(168,85,247,0.15)',
+              border: '1px solid rgba(168,85,247,0.35)',
+              color: generating ? 'var(--text-dim)' : '#a855f7',
+            }}>
+            <FlaskConical size={15} />
+            {generating ? 'Generating...' : `Generate ${genPeriods} Period${genPeriods > 1 ? 's' : ''}`}
+          </button>
+        </div>
 
         {/* Info footer */}
         <p className="text-xs font-mono text-center px-4" style={{ color: 'var(--text-dim)' }}>

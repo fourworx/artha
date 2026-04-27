@@ -380,7 +380,7 @@ export default function Tier2Home() {
   const { family } = useFamily()
   const navigate = useNavigate()
   const fmt = useCurrency()
-  const { periodStart, periodEnd, label: periodLabel } = usePeriod()
+  const { periodStart, periodEnd, progressPeriodStart, progressPeriodEnd, label: periodLabel } = usePeriod()
 
   const [projected,       setProjected]       = useState(null)
   const [streak,          setStreak]          = useState(0)
@@ -432,9 +432,9 @@ export default function Tier2Home() {
     try {
       const [allChores, choreLogs, utilityCharges, streakLogs] = await Promise.all([
         getChores(FAMILY_ID),
-        getChoreLogsForPeriod(currentMember.id, periodStart, periodEnd),
-        getUtilityCharges(currentMember.id, periodStart, periodEnd),
-        getChoreLogsForPeriod(currentMember.id, daysAgo(60), periodEnd),
+        getChoreLogsForPeriod(currentMember.id, progressPeriodStart, progressPeriodEnd),
+        getUtilityCharges(currentMember.id, progressPeriodStart, progressPeriodEnd),
+        getChoreLogsForPeriod(currentMember.id, daysAgo(60), progressPeriodEnd),
       ])
 
       const mandatoryChores = allChores.filter(c =>
@@ -453,14 +453,14 @@ export default function Tier2Home() {
         allChores,
         choreLogs,
         utilityCharges,
-        periodStart,
-        periodEnd,
+        periodStart: progressPeriodStart,
+        periodEnd:   progressPeriodEnd,
         streakDays,
       })
 
       // ── Mandatory % over FULL period (all days, not just days with logs) ──
-      const start = new Date(periodStart + 'T12:00:00')
-      const end   = new Date(periodEnd   + 'T12:00:00')
+      const start = new Date(progressPeriodStart + 'T12:00:00')
+      const end   = new Date(progressPeriodEnd   + 'T12:00:00')
       const totalDays = Math.round((end - start) / (1000 * 60 * 60 * 24)) + 1
       let totalExpected = 0
       let totalApproved = 0
@@ -502,7 +502,7 @@ export default function Tier2Home() {
         streakBonusPct: calc.earnings.streakBonusPct,
       })
     } catch { /* silent — projection is non-critical */ }
-  }, [currentMember, family, periodStart, periodEnd])
+  }, [currentMember, family, progressPeriodStart, progressPeriodEnd])
 
   useEffect(() => { loadProjected() }, [loadProjected])
 
