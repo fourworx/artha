@@ -80,12 +80,14 @@ function EarningsSummary({ child, mandatoryChores, allBonusChores, payPeriod, fm
 
       {/* Salary header — tap to edit */}
       <div className="flex items-center justify-between">
-        <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-          BASE SALARY
+        <div>
+          <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>BASE SALARY</p>
           {totalWeeklyExpected > 0 && (
-            <span style={{ color: 'var(--text-dim)' }}> · {totalWeeklyExpected} completions/wk</span>
+            <p className="text-xs font-mono whitespace-nowrap" style={{ color: 'var(--text-dim)' }}>
+              {totalWeeklyExpected} completions/wk
+            </p>
           )}
-        </p>
+        </div>
         {!editing && (
           <button onClick={startEdit}
             className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-xs font-mono transition-all"
