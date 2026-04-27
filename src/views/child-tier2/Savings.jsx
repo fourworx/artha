@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react'
 import { AreaChart, Area, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts'
 import { useAuth } from '../../context/AuthContext'
 import { useFamily, useCurrency } from '../../context/FamilyContext'
-import { getPayslips, addMemberRequest } from '../../db/operations'
+import { getPayslips, addMemberRequest, transferSavingsToWallet } from '../../db/operations'
 import { shortDate, today } from '../../utils/dates'
 import { projectSavingsGrowth } from '../../engine/interest'
 import { X } from 'lucide-react'
@@ -20,34 +20,53 @@ const CustomTooltip = ({ active, payload }) => {
 }
 
 // ── Savings withdrawal sheet ──────────────────────────────────────────────────
-function SavingsWithdrawSheet({ savings, memberId, onClose, fmt }) {
+const WITHDRAW_DESTS = [
+  { id: 'wallet', label: 'Spending Wallet', hint: 'Instant — no approval needed', instant: true  },
+  { id: 'cash',   label: 'Physical Cash',   hint: 'Parent hands you cash',        instant: false },
+  { id: 'bank',   label: 'Bank Transfer',   hint: 'Transferred to your bank',     instant: false },
+]
+
+function SavingsWithdrawSheet({ savings, memberId, onClose, onDone, fmt }) {
+  const [dest,    setDest]    = useState('wallet')
   const [amount,  setAmount]  = useState('')
   const [note,    setNote]    = useState('')
   const [saving,  setSaving]  = useState(false)
   const [done,    setDone]    = useState(false)
   const [error,   setError]   = useState('')
 
-  const max    = savings
-  const parsed = Math.min(Number(amount) || 0, max)
+  const max       = savings
+  const parsed    = Math.min(Number(amount) || 0, max)
+  const isInstant = WITHDRAW_DESTS.find(d => d.id === dest)?.instant ?? false
 
   const handleSubmit = async () => {
     if (!parsed || parsed <= 0) { setError('Enter a valid amount'); return }
     setSaving(true); setError('')
     try {
-      await addMemberRequest({
-        id: crypto.randomUUID(),
-        familyId: FAMILY_ID,
-        memberId,
-        type: 'savings_withdrawal',
-        amount: parsed,
-        description: `Savings withdrawal to wallet${note.trim() ? ': ' + note.trim() : ''}`,
-        metadata: { note: note.trim() },
-        requestedAt: Date.now(),
-      })
+      if (isInstant) {
+        await transferSavingsToWallet(memberId, parsed)
+        onDone?.()
+      } else {
+        await addMemberRequest({
+          id: crypto.randomUUID(),
+          familyId: FAMILY_ID,
+          memberId,
+          type: 'savings_withdrawal',
+          amount: parsed,
+          description: `Savings withdrawal — ${dest === 'bank' ? 'bank transfer' : 'physical cash'}${note.trim() ? ': ' + note.trim() : ''}`,
+          metadata: { destination: dest, note: note.trim() },
+          requestedAt: Date.now(),
+        })
+      }
       setDone(true)
     } catch (e) { setError(e.message) }
     finally { setSaving(false) }
   }
+
+  const doneEmoji   = isInstant ? '✅' : '📤'
+  const doneTitle   = isInstant ? 'Moved to wallet!' : 'Request sent!'
+  const doneSubtitle = isInstant
+    ? `${fmt(parsed)} is now in your spending wallet.`
+    : 'Your parent will approve the cash or bank transfer.'
 
   return (
     <div className="fixed inset-0 z-50 flex flex-col justify-end"
@@ -70,11 +89,9 @@ function SavingsWithdrawSheet({ savings, memberId, onClose, fmt }) {
 
         {done ? (
           <div className="flex flex-col items-center justify-center py-10 gap-3 px-4">
-            <span className="text-5xl">📤</span>
-            <p className="text-sm font-mono font-semibold" style={{ color: 'var(--positive)' }}>Request sent!</p>
-            <p className="text-xs font-mono text-center" style={{ color: 'var(--text-muted)' }}>
-              Your parent will approve and move the funds to your wallet.
-            </p>
+            <span className="text-5xl">{doneEmoji}</span>
+            <p className="text-sm font-mono font-semibold" style={{ color: 'var(--positive)' }}>{doneTitle}</p>
+            <p className="text-xs font-mono text-center" style={{ color: 'var(--text-muted)' }}>{doneSubtitle}</p>
             <button onClick={onClose}
               className="w-full py-3 rounded-xl text-sm font-mono font-semibold mt-2"
               style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
@@ -83,11 +100,40 @@ function SavingsWithdrawSheet({ savings, memberId, onClose, fmt }) {
           </div>
         ) : (
           <div className="px-4 py-4 flex flex-col gap-4">
+            {/* Balance */}
             <div className="p-2.5 rounded-lg" style={{ background: 'var(--bg-raised)' }}>
               <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SAVINGS BALANCE</p>
               <p className="text-base font-mono font-bold mt-0.5" style={{ color: '#60a5fa' }}>{fmt(max)}</p>
             </div>
 
+            {/* Destination */}
+            <div className="flex flex-col gap-2">
+              {WITHDRAW_DESTS.map(opt => (
+                <button key={opt.id} onClick={() => setDest(opt.id)}
+                  className="flex items-center justify-between px-3 py-2.5 rounded-xl transition-all"
+                  style={{
+                    background: dest === opt.id ? 'rgba(96,165,250,0.1)' : 'var(--bg-raised)',
+                    border: `1px solid ${dest === opt.id ? 'rgba(96,165,250,0.35)' : 'var(--border)'}`,
+                  }}>
+                  <div className="flex flex-col items-start">
+                    <span style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 600,
+                      color: dest === opt.id ? '#60a5fa' : 'var(--text-primary)' }}>
+                      {opt.label}
+                    </span>
+                    <span style={{ fontSize: 9, fontFamily: 'monospace', color: 'var(--text-dim)' }}>
+                      {opt.hint}
+                    </span>
+                  </div>
+                  {dest === opt.id && (
+                    <span style={{ fontSize: 10, fontFamily: 'monospace', color: opt.instant ? 'var(--positive)' : 'var(--warning)' }}>
+                      {opt.instant ? 'INSTANT' : 'NEEDS APPROVAL'}
+                    </span>
+                  )}
+                </button>
+              ))}
+            </div>
+
+            {/* Amount */}
             <div className="flex flex-col gap-2">
               <div className="flex gap-2 flex-wrap">
                 {[50, 100, 250, 500].filter(v => v <= max).map(v => (
@@ -108,19 +154,24 @@ function SavingsWithdrawSheet({ savings, memberId, onClose, fmt }) {
               />
             </div>
 
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>REASON (optional)</label>
-              <input value={note} onChange={e => setNote(e.target.value)}
-                placeholder="e.g. Buying a gift"
-                className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
-                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-              />
-            </div>
+            {/* Note (only for approval flows) */}
+            {!isInstant && (
+              <div className="flex flex-col gap-1">
+                <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>NOTE (optional)</label>
+                <input value={note} onChange={e => setNote(e.target.value)}
+                  placeholder="e.g. Buying a gift"
+                  className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
+                  style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                />
+              </div>
+            )}
 
             {parsed > 0 && (
               <div className="flex items-center justify-between px-3 py-2 rounded-lg"
                 style={{ background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.2)' }}>
-                <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Savings after approval</span>
+                <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                  {isInstant ? 'Savings after transfer' : 'Savings after approval'}
+                </span>
                 <span className="text-xs font-mono font-semibold" style={{ color: '#60a5fa' }}>
                   {fmt(max - parsed)} remaining
                 </span>
@@ -136,7 +187,9 @@ function SavingsWithdrawSheet({ savings, memberId, onClose, fmt }) {
                 border: '1px solid rgba(96,165,250,0.3)',
                 color: saving || !parsed ? 'var(--text-dim)' : '#60a5fa',
               }}>
-              {saving ? 'Sending...' : `Request ${parsed ? fmt(parsed) : '—'} withdrawal`}
+              {saving ? 'Processing...' : isInstant
+                ? `Move ${parsed ? fmt(parsed) : '—'} to wallet`
+                : `Request ${parsed ? fmt(parsed) : '—'} withdrawal`}
             </button>
           </div>
         )}
@@ -146,7 +199,7 @@ function SavingsWithdrawSheet({ savings, memberId, onClose, fmt }) {
 }
 
 export default function Savings() {
-  const { currentMember } = useAuth()
+  const { currentMember, refreshMember } = useAuth()
   const { family } = useFamily()
   const fmt = useCurrency()
   const [payslips,      setPayslips]      = useState([])
@@ -366,6 +419,7 @@ export default function Savings() {
           memberId={currentMember.id}
           fmt={fmt}
           onClose={() => setShowWithdraw(false)}
+          onDone={refreshMember}
         />
       )}
     </div>
