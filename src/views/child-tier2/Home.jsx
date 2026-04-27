@@ -1140,6 +1140,10 @@ export default function Tier2Home() {
           const pctColor       = projected.mandatoryPct === 100 ? 'var(--positive)' : 'var(--warning)'
           const pctBg          = projected.mandatoryPct === 100 ? 'rgba(74,222,128,0.12)' : 'rgba(251,191,36,0.1)'
 
+          const barHue   = Math.round(projected.mandatoryPct * 1.2)  // 0=red → 120=green
+          const barColor = `hsl(${barHue}, 75%, 48%)`
+          const barGlow  = `hsl(${barHue}, 75%, 62%)`
+
           const Frac = ({ top, bot, label, color, flat = false }) => (
             <div className="flex flex-col items-center" style={{ minWidth: 40 }}>
               <span style={{ fontSize: 15, fontWeight: 700, fontFamily: 'monospace', color, lineHeight: 1.1 }}>{top}</span>
@@ -1147,7 +1151,7 @@ export default function Tier2Home() {
                 ? <div style={{ height: 4 }} />
                 : <div style={{ width: '100%', height: 1, background: 'var(--border-bright)', margin: '3px 0' }} />
               }
-              <span style={{ fontSize: 10, fontFamily: 'monospace', color: flat ? 'transparent' : 'var(--text-muted)', lineHeight: 1.1 }}>{flat ? '—' : bot}</span>
+              <span style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 600, color: flat ? 'transparent' : 'var(--text-primary)', lineHeight: 1.1, opacity: flat ? 0 : 0.55 }}>{flat ? '—' : bot}</span>
               <span style={{ fontSize: 8, fontFamily: 'monospace', color: 'var(--text-dim)', marginTop: 3, letterSpacing: '0.05em' }}>{label}</span>
             </div>
           )
@@ -1178,12 +1182,26 @@ export default function Tier2Home() {
                 <Frac top={fmt(totalEarned)} bot={fmt(totalPotential)} label="TOTAL" color="var(--positive)" />
               </div>
 
-              {/* Mandatory % + streak */}
-              <span className="text-xs font-mono px-2 py-0.5 rounded-full self-start"
-                style={{ background: pctBg, color: pctColor }}>
-                {projected.mandatoryPct}% mandatory
-                {projected.streakBonus > 0 ? ` · 🔥 ${streak}d +${fmt(projected.streakBonus)}` : ''}
-              </span>
+              {/* Chore completion gradient progress bar */}
+              <div className="flex flex-col gap-1.5">
+                <div className="flex justify-between items-center">
+                  <span style={{ fontSize: 9, fontFamily: 'monospace', color: 'var(--text-dim)', letterSpacing: '0.06em' }}>CHORES COMPLETED</span>
+                  <span style={{ fontSize: 11, fontFamily: 'monospace', color: barColor, fontWeight: 700 }}>
+                    {projected.mandatoryPct}%
+                    {projected.streakBonus > 0 ? `  🔥 ${streak}d +${fmt(projected.streakBonus)}` : ''}
+                  </span>
+                </div>
+                <div style={{ height: 7, borderRadius: 99, background: 'var(--bg-raised)', overflow: 'hidden' }}>
+                  <div style={{
+                    height: '100%',
+                    width: `${projected.mandatoryPct}%`,
+                    borderRadius: 99,
+                    background: `linear-gradient(90deg, hsl(${Math.max(0, barHue - 25)}, 75%, 42%), ${barColor})`,
+                    boxShadow: projected.mandatoryPct > 0 ? `0 0 8px ${barGlow}` : 'none',
+                    transition: 'width 0.6s cubic-bezier(0.4,0,0.2,1)',
+                  }} />
+                </div>
+              </div>
 
               {/* Wallet nudge */}
               {(accounts.spending ?? 0) > 0 && walletInterestPotential > 0 && (
