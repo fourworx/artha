@@ -494,6 +494,47 @@ export async function approveBonusChoreLog(logId) {
   await approveChoreLog(logId)
 }
 
+// Parent marks a chore as done on behalf of a child — pre-approved, no pending state.
+// Idempotent: if an approved log already exists for this chore+date, does nothing.
+export async function parentCompleteChore(choreId, memberId, date) {
+  // Check for existing log
+  const { data: existing } = await supabase
+    .from('chore_logs')
+    .select('id, status')
+    .eq('chore_id', choreId)
+    .eq('member_id', memberId)
+    .eq('date', date)
+    .maybeSingle()
+
+  if (existing?.status === 'approved') return // already done
+  if (existing) {
+    // Upgrade pending/rejected to approved
+    await approveChoreLog(existing.id)
+    return
+  }
+
+  // Insert directly as approved
+  throwIfError(await supabase.from('chore_logs').insert({
+    id:           crypto.randomUUID(),
+    chore_id:     choreId,
+    member_id:    memberId,
+    date,
+    status:       'approved',
+    completed_at: Date.now(),
+    approved_at:  Date.now(),
+  }))
+}
+
+// Undo: parent removes their own chore completion for a child
+export async function parentUndoChore(choreId, memberId, date) {
+  await supabase
+    .from('chore_logs')
+    .delete()
+    .eq('chore_id', choreId)
+    .eq('member_id', memberId)
+    .eq('date', date)
+}
+
 export async function approveRewardRequest(requestId, memberId, amount) {
   const member = await getMember(memberId)
   if (!member) throw new Error('Member not found')

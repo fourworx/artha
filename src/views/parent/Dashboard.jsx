@@ -1,13 +1,135 @@
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { Play, AlertCircle, Plus, X, FileText, CheckCircle } from 'lucide-react'
+import { Play, AlertCircle, Plus, X, FileText, CheckCircle, ClipboardCheck } from 'lucide-react'
 import { useAuth } from '../../context/AuthContext'
 import { useFamily, useCurrency, usePeriod } from '../../context/FamilyContext'
 import { displayDate, today } from '../../utils/dates'
 import { runPayslip, settlePayslip } from '../../engine/payslip'
 import { getDueChoresForMember, buildLogMap } from '../../engine/chores'
-import { getChoreLogsForDate, getChoreLogsForPeriod, giveBonus, giveLoan, getPayslips, getPayslipForPeriod, getOverdueDrafts } from '../../db/operations'
+import { getChoreLogsForDate, getChoreLogsForPeriod, giveBonus, giveLoan, getPayslips, getPayslipForPeriod, getOverdueDrafts, parentCompleteChore, parentUndoChore } from '../../db/operations'
 import PayslipCard from '../../components/PayslipCard'
+
+// ── Parent Chore Sheet ────────────────────────────────────────────────────────
+function ParentChoreSheet({ child, chores, onClose, onDone }) {
+  const dateStr = today()
+  const dueChores = chores.filter(c =>
+    c.isActive && c.assignedTo.includes(child.id) &&
+    (() => {
+      const dow = new Date().getDay()
+      switch (c.recurrence) {
+        case 'daily':   return true
+        case 'weekday': return dow >= 1 && dow <= 5
+        case 'weekend': return dow === 0 || dow === 6
+        case 'weekly':  return dow === 1
+        case 'custom':  return true
+        default:        return false
+      }
+    })()
+  )
+
+  const mandatory = dueChores.filter(c => c.type === 'mandatory')
+  const bonus     = dueChores.filter(c => c.type === 'bonus')
+
+  const [approved, setApproved] = useState(new Set())
+  const [saving,   setSaving]   = useState(null) // choreId being toggled
+
+  // Load already-approved logs for today
+  useEffect(() => {
+    getChoreLogsForDate(child.id, dateStr).then(logs => {
+      const done = new Set(logs.filter(l => l.status === 'approved').map(l => l.choreId))
+      setApproved(done)
+    })
+  }, [child.id, dateStr])
+
+  const toggle = async (chore) => {
+    setSaving(chore.id)
+    try {
+      if (approved.has(chore.id)) {
+        await parentUndoChore(chore.id, child.id, dateStr)
+        setApproved(prev => { const s = new Set(prev); s.delete(chore.id); return s })
+      } else {
+        await parentCompleteChore(chore.id, child.id, dateStr)
+        setApproved(prev => new Set([...prev, chore.id]))
+      }
+      onDone?.()
+    } finally { setSaving(null) }
+  }
+
+  const ChoreRow = ({ chore }) => {
+    const done = approved.has(chore.id)
+    const busy = saving === chore.id
+    return (
+      <button
+        onClick={() => toggle(chore)}
+        disabled={busy}
+        className="flex items-center gap-3 w-full px-3 py-2.5 rounded-xl transition-all active:scale-95 text-left"
+        style={{
+          background: done ? 'rgba(74,222,128,0.08)' : 'var(--bg-raised)',
+          border: `1px solid ${done ? 'rgba(74,222,128,0.25)' : 'var(--border)'}`,
+          opacity: busy ? 0.6 : 1,
+        }}>
+        <div className="flex-shrink-0 w-5 h-5 rounded-full flex items-center justify-center"
+          style={{ background: done ? 'var(--positive)' : 'var(--bg-surface)', border: `1px solid ${done ? 'var(--positive)' : 'var(--border-bright)'}` }}>
+          {done && <span style={{ fontSize: 10, color: '#000' }}>✓</span>}
+        </div>
+        <span className="text-xs font-mono flex-1" style={{ color: done ? 'var(--positive)' : 'var(--text-primary)' }}>
+          {chore.title}
+        </span>
+        {chore.value > 0 && (
+          <span className="text-xs font-mono" style={{ color: 'var(--warning)' }}>+₹{chore.value}</span>
+        )}
+      </button>
+    )
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end"
+      style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="rounded-t-2xl flex flex-col max-h-[80vh]"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full" style={{ background: 'var(--border-bright)' }} />
+        </div>
+        <div className="flex items-center justify-between px-4 py-3"
+          style={{ borderBottom: '1px solid var(--border)' }}>
+          <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+            {child.avatar} {child.name}'s Chores — Today
+          </span>
+          <button onClick={onClose} style={{ color: 'var(--text-muted)', background: 'none', border: 'none' }}>
+            <X size={18} />
+          </button>
+        </div>
+        <div className="overflow-y-auto px-4 py-4 flex flex-col gap-4">
+          {dueChores.length === 0 && (
+            <p className="text-xs font-mono text-center py-6" style={{ color: 'var(--text-muted)' }}>
+              No chores due today.
+            </p>
+          )}
+          {mandatory.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-mono" style={{ color: 'var(--text-dim)', letterSpacing: '0.06em' }}>MANDATORY</p>
+              {mandatory.map(c => <ChoreRow key={c.id} chore={c} />)}
+            </div>
+          )}
+          {bonus.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <p className="text-xs font-mono" style={{ color: 'var(--text-dim)', letterSpacing: '0.06em' }}>BONUS</p>
+              {bonus.map(c => <ChoreRow key={c.id} chore={c} />)}
+            </div>
+          )}
+        </div>
+        <div className="px-4 pb-6 pt-2">
+          <button onClick={onClose}
+            className="w-full py-3 rounded-xl text-sm font-mono font-semibold"
+            style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  )
+}
 
 // ── Give Money sheet ──────────────────────────────────────────────────────────
 function GiveMoneySheet({ child, onDone, onClose }) {
@@ -490,6 +612,7 @@ export default function ParentDashboard() {
   const [choreStats,     setChoreStats]     = useState({})
   const [periodStats,    setPeriodStats]    = useState({})
   const [givingTo,       setGivingTo]       = useState(null)
+  const [choreSheetFor,  setChoreSheetFor]  = useState(null)
   const [viewPayslipFor, setViewPayslipFor] = useState(null)
   const [allRan,          setAllRan]          = useState(false)
   const [currentDrafts,   setCurrentDrafts]   = useState([]) // drafts for this period
@@ -709,8 +832,15 @@ export default function ParentDashboard() {
               </div>
 
               {/* Actions row */}
-              {child.tier >= 2 && (
-                <div className="flex items-center gap-2 mb-3" onClick={e => e.stopPropagation()}>
+              <div className="flex items-center gap-2 mb-3" onClick={e => e.stopPropagation()}>
+                <button
+                  onClick={() => setChoreSheetFor(child)}
+                  className="p-1.5 rounded-lg transition-all active:scale-95"
+                  style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+                  title="Mark chores done">
+                  <ClipboardCheck size={14} />
+                </button>
+                {child.tier >= 2 && <>
                   <RunPayslipButton child={child} periodEnd={periodEnd} payday={payday} onDone={async () => { await reload(); await refreshBanners() }} />
                   <button
                     onClick={() => setViewPayslipFor(child)}
@@ -726,8 +856,8 @@ export default function ParentDashboard() {
                     title="Give bonus or loan">
                     <Plus size={14} />
                   </button>
-                </div>
-              )}
+                </>}
+              </div>
 
               {/* Outstanding loan chip */}
               {loanOutstanding > 0 && (
@@ -778,6 +908,16 @@ export default function ParentDashboard() {
           )
         })}
       </div>
+
+      {/* Parent Chore sheet */}
+      {choreSheetFor && (
+        <ParentChoreSheet
+          child={choreSheetFor}
+          chores={chores}
+          onClose={() => setChoreSheetFor(null)}
+          onDone={loadChoreStats}
+        />
+      )}
 
       {/* Give Money sheet */}
       {givingTo && (
