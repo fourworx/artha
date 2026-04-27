@@ -5,7 +5,7 @@ import { getPayslips, getTransactionsForPeriod, getTransactions, parentDonate, p
 import { settlePayslip } from '../../engine/payslip'
 import PayslipCard from '../../components/PayslipCard'
 import { displayDate, today } from '../../utils/dates'
-import { ChevronLeft, ChevronDown, ChevronUp, Heart, Target, ArrowDownToLine, ArrowUpFromLine, Banknote, PiggyBank } from 'lucide-react'
+import { ChevronLeft, ChevronDown, ChevronUp, ChevronRight, Heart, Target, ArrowDownToLine, ArrowUpFromLine, Banknote, PiggyBank, X } from 'lucide-react'
 import NetWorthChart from '../../components/NetWorthChart'
 import SpendingBreakdown from '../../components/SpendingBreakdown'
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
@@ -99,6 +99,8 @@ export default function ChildDetail() {
   const [settling,      setSettling]      = useState(null)
   const [settleError,   setSettleError]   = useState(null)
   const [allTxs,        setAllTxs]        = useState([])
+
+  const [showNetWorth,  setShowNetWorth]  = useState(false)
 
   // Parent-direct money actions
   const [activeSheet,   setActiveSheet]   = useState(null) // 'donate'|'savingsToWallet'|'walletToSavings'|'walletWithdraw'|'subGoalDeposit'|'subGoalWithdraw'
@@ -437,11 +439,17 @@ export default function ChildDetail() {
         {netWorthData.length >= 2 && (
           <div className="flex flex-col gap-3">
             <p className="text-xs font-mono px-1" style={{ color: 'var(--text-muted)' }}>ANALYTICS</p>
-            <div className="p-4 rounded-xl flex flex-col gap-2"
+            <button onClick={() => setShowNetWorth(true)}
+              className="p-4 rounded-xl flex flex-col gap-2 w-full text-left transition-all active:scale-95"
               style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>NET WORTH OVER TIME</p>
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>NET WORTH OVER TIME</p>
+                <span className="text-xs font-mono flex items-center gap-0.5" style={{ color: 'var(--text-dim)' }}>
+                  breakdown <ChevronRight size={11} />
+                </span>
+              </div>
               <NetWorthChart data={netWorthData} />
-            </div>
+            </button>
             {allTxs.length > 0 && (
               <div className="p-4 rounded-xl flex flex-col gap-2"
                 style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
@@ -776,6 +784,72 @@ export default function ChildDetail() {
           </div>
         </div>
       )}
+
+      {/* Net worth breakdown sheet */}
+      {showNetWorth && (() => {
+        const accs        = child.accounts ?? {}
+        const sgs         = accs.subGoals ?? []
+        const subGoalTotal = sgs.reduce((s, g) => s + (g.balance ?? 0), 0)
+        const totalSavings = (accs.savings ?? 0) + subGoalTotal
+        const spending    = accs.spending ?? 0
+        const philanthropy = accs.philanthropy ?? 0
+        const loan        = accs.loan?.outstanding ?? 0
+        const netWorth    = spending + totalSavings + philanthropy - loan
+
+        const Row = ({ label, value, color, indent = false, sub = false }) => (
+          <div className={`flex items-center justify-between py-2 ${indent ? 'pl-6' : ''}`}
+            style={{ borderBottom: '1px solid var(--border)' }}>
+            <span style={{ fontFamily: 'monospace', fontSize: sub ? 10 : 12, color: sub ? 'var(--text-dim)' : 'var(--text-muted)' }}>{label}</span>
+            <span style={{ fontFamily: 'monospace', fontSize: sub ? 10 : 12, fontWeight: 600, color: color ?? 'var(--text-primary)' }}>{value}</span>
+          </div>
+        )
+
+        return (
+          <div className="fixed inset-0 z-50 flex flex-col justify-end"
+            style={{ background: 'rgba(0,0,0,0.6)' }}
+            onClick={e => e.target === e.currentTarget && setShowNetWorth(false)}>
+            <div className="rounded-t-2xl flex flex-col" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', maxHeight: '80vh' }}>
+              <div className="flex justify-center pt-3 pb-1 shrink-0">
+                <div className="w-10 h-1 rounded-full" style={{ background: 'var(--border-bright)' }} />
+              </div>
+              <div className="flex items-center justify-between px-4 py-3 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+                <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+                  Net Worth Breakdown · {child.name}
+                </span>
+                <button onClick={() => setShowNetWorth(false)} style={{ color: 'var(--text-muted)', background: 'none', border: 'none' }}>
+                  <X size={18} />
+                </button>
+              </div>
+              <div className="overflow-y-auto px-4 py-3 flex flex-col">
+                <p className="text-xs font-mono mb-1" style={{ color: 'var(--text-dim)' }}>ASSETS</p>
+                <Row label="Spending wallet" value={fmt(spending)}     color="var(--positive)" />
+                <Row label="Savings account" value={fmt(accs.savings ?? 0)} color="#60a5fa" />
+                {sgs.map(g => (
+                  <Row key={g.id} label={`↳ ${g.name}`} value={`${fmt(g.balance)} / ${fmt(g.target)}`} color="#818cf8" indent sub />
+                ))}
+                {sgs.length > 0 && (
+                  <Row label="Sub-goals total" value={fmt(subGoalTotal)} color="#818cf8" indent />
+                )}
+                <Row label="Philanthropy" value={fmt(philanthropy)} color="#D4A017" />
+                {loan > 0 && (
+                  <>
+                    <p className="text-xs font-mono mt-3 mb-1" style={{ color: 'var(--text-dim)' }}>LIABILITIES</p>
+                    <Row label="Loan outstanding" value={`−${fmt(loan)}`} color="var(--negative)" />
+                  </>
+                )}
+                <div className="flex items-center justify-between mt-4 px-3 py-3 rounded-xl"
+                  style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-bright)' }}>
+                  <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-muted)' }}>NET WORTH</span>
+                  <span className="text-lg font-mono font-bold" style={{ color: netWorth >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
+                    {fmt(netWorth)}
+                  </span>
+                </div>
+                <div className="h-4" />
+              </div>
+            </div>
+          </div>
+        )
+      })()}
     </div>
   )
 }
