@@ -883,6 +883,7 @@ export default function Tier2Home() {
     : null
 
   // Wallet delta vs last payslip
+  const lastSettledWallet = payslips.length > 0 ? (payslips[payslips.length - 1].balancesAfter?.spending ?? 0) : null
   const walletDelta = lastSettledWallet !== null
     ? (accounts.spending ?? 0) - lastSettledWallet
     : null
