@@ -4,7 +4,7 @@ import { useAuth } from '../../context/AuthContext'
 import { useFamily, useCurrency, usePeriod } from '../../context/FamilyContext'
 import { displayDate, today } from '../../utils/dates'
 import { calculatePayslip } from '../../engine/payslip'
-import { getChoreLogsForPeriod, getChores, getUtilityCharges, makeEarlyRepayment, getLatestPayslip, markCreditPopupSeen, getPayslips, addMemberRequest, getTransactions } from '../../db/operations'
+import { getChoreLogsForPeriod, getChores, getUtilityCharges, makeEarlyRepayment, getLatestPayslip, markCreditPopupSeen, getPayslips, addMemberRequest, getTransactions, getTransactionsForPeriod } from '../../db/operations'
 import { calculateStreak } from '../../engine/chores'
 import { FAMILY_ID } from '../../utils/constants'
 import { daysAgo } from '../../utils/dates'
@@ -728,20 +728,25 @@ export default function Tier2Home() {
   const [creditPopup,     setCreditPopup]     = useState(null) // { score, prevScore }
   const [latestPayslip,   setLatestPayslip]   = useState(null)
   const [payslips,        setPayslips]        = useState([])
+  const [allTxns,         setAllTxns]         = useState([])
 
   // Refresh member data each time this view mounts so balance reflects
   // any payslip or bonus credits that happened since login.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   useEffect(() => { refreshMember() }, [])
 
-  // Load payslips for charts
+  // Load payslips for charts, then load all transactions since earliest payslip
   useEffect(() => {
     if (!currentMember) return
-    getPayslips(currentMember.id).then(ps => {
+    getPayslips(currentMember.id).then(async ps => {
       const settled = ps
         .filter(p => p.status === 'settled')
         .sort((a, b) => a.periodEnd.localeCompare(b.periodEnd))
       setPayslips(settled)
+      // Load all transactions from the earliest payslip onwards for spent calculations
+      const earliest = settled.length > 0 ? settled[0].periodStart : progressPeriodStart
+      const txns = await getTransactionsForPeriod(currentMember.id, earliest, '2099-12-31').catch(() => [])
+      setAllTxns(txns)
     }).catch(() => {})
   }, [currentMember?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -855,23 +860,26 @@ export default function Tier2Home() {
   // Wallet sparkline: spending balance per settled payslip
   const walletHistory = payslips.map(p => p.balancesAfter?.spending ?? 0)
 
-  // Spent per period: derived from consecutive wallet balances + allocs
-  const spentHistory = payslips.map((p, i) => {
-    const prevWallet = i === 0 ? 0 : (payslips[i - 1].balancesAfter?.spending ?? 0)
-    const alloc      = p.allocations?.spending ?? 0
-    const newWallet  = p.balancesAfter?.spending ?? 0
-    return Math.max(0, prevWallet + alloc - newWallet)
-  })
+  // Only reward purchases and cash/bank withdrawals count as "spent"
+  const SPENT_TYPES = new Set(['reward', 'withdrawal'])
+  const spentTxns = allTxns.filter(t => SPENT_TYPES.has(t.type))
 
-  // Spent this period = drop in wallet since last settled payslip
-  const lastSettledWallet  = payslips.length > 0
-    ? (payslips[payslips.length - 1].balancesAfter?.spending ?? 0)
+  // Spent per period: sum of reward+withdrawal txns within each payslip period
+  const spentHistory = payslips.map(p =>
+    spentTxns
+      .filter(t => t.date >= p.periodStart && t.date <= p.periodEnd)
+      .reduce((s, t) => s + Math.abs(t.amount), 0)
+  )
+
+  // Spent this period = reward+withdrawal txns since progressPeriodStart
+  const spentThisPeriod = allTxns.length > 0 || payslips.length > 0
+    ? spentTxns
+        .filter(t => t.date >= progressPeriodStart)
+        .reduce((s, t) => s + Math.abs(t.amount), 0)
     : null
-  const spentThisPeriod    = lastSettledWallet !== null
-    ? Math.max(0, lastSettledWallet - (accounts.spending ?? 0))
-    : null
-  const prevPeriodSpent    = spentHistory.length >= 2
-    ? spentHistory[spentHistory.length - 2]
+
+  const prevPeriodSpent = spentHistory.length >= 1
+    ? spentHistory[spentHistory.length - 1]
     : null
 
   // Wallet delta vs last payslip
@@ -1042,11 +1050,16 @@ export default function Tier2Home() {
               style={{ color: spentThisPeriod > 0 ? 'var(--negative)' : 'var(--text-dim)' }}>
               {spentThisPeriod !== null ? fmt(spentThisPeriod) : '—'}
             </p>
-            {prevPeriodSpent !== null && (
-              <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-dim)' }}>
-                {fmt(prevPeriodSpent)} last period
-              </p>
-            )}
+            {prevPeriodSpent !== null && (() => {
+              const better = spentThisPeriod !== null && spentThisPeriod < prevPeriodSpent
+              const worse  = spentThisPeriod !== null && spentThisPeriod > prevPeriodSpent
+              const color  = better ? 'var(--positive)' : worse ? 'var(--negative)' : 'var(--text-dim)'
+              return (
+                <p className="text-xs font-mono mt-1" style={{ color }}>
+                  {fmt(prevPeriodSpent)} last period
+                </p>
+              )
+            })()}
             <div className="mt-2 -mx-1">
               <Sparkline data={spentHistory} color="#f87171" />
             </div>
