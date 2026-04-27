@@ -1,7 +1,46 @@
 ---
-name: Artha — Session 16 Handoff
-description: Full current state after sessions 1–16; use to resume in next session
+name: Artha — Session 17 Handoff
+description: Full current state after sessions 1–17; use to resume in next session
 type: project
+---
+
+## Session 17 completed (2026-04-27)
+
+### Features built / bugs fixed
+
+**Generate Test History (Backup screen — dev tool)**
+- New purple card in Parent → More → Backup: "Generate Test History"
+- Period selector: 1 / 2 / 4 / 8 past periods
+- For each past period × each Tier 2 child:
+  - Inserts approved `chore_logs` directly via Supabase (70–100% random completion rate per period)
+  - Bonus chores: 50% random chance each bonus chore gets done, on a random day in the period
+  - Calls `runPayslip(memberId, { start, end })` then `settlePayslip(id)`
+- Live progress text while running; status banner on completion
+- Marked as dev-only — to be removed before distribution
+
+**Projected earnings widget payday bug fix (child home)**
+- Bug: on Monday (payday), widget showed last week's settled chore data (21%, 356/500)
+- Root cause: `loadProjected` used `periodStart`/`periodEnd` which on payday point to the just-settled cycle (Mon–Sun of last week)
+- Fix: `usePeriod` already exposes `progressPeriodStart`/`progressPeriodEnd` which flip to today→today+6 on payday; `loadProjected` now uses these instead
+
+**Credit score history chart**
+- New SVG chart (same style as NetWorthChart — no recharts) added in two places:
+  - **Parent ChildDetail**: in ANALYTICS section after bonus chore chart
+  - **Child Home**: in STATS section after Savings Growth chart
+- Design: per-segment band colours (green ≥700, gold #D4A017 ≥500, red <500), gradient fill below line tinted to current score's colour, dashed reference lines at 700 and 500, colour-coded key (numbers only, no line swatches), current score shown in parent card header
+- Fixed Y domain 300–850 so band positions are spatially meaningful
+- Exported as `CreditScoreLineChart` from `Home.jsx`; ChildDetail imports and reuses it
+
+**Credit score stored at post-settlement time (bug fix)**
+- Bug: `payslip.creditScore` was written at draft creation (before `settlePayslip` applied the delta) so all periods showed the same pre-settlement score → flat chart
+- Fix: `settlePayslip` now computes `settledScore = clamp(300, 850, currentScore + scoreDelta)` and writes it back to the payslip row via new `updatePayslipCreditScore(payslipId, score)` operation
+- New DB operation: `updatePayslipCreditScore` in `operations.js`
+
+**Credit score architecture note (updated)**
+- Was: `-10` for completion < 50%
+- Now: `+10` perfect, `-2×missed` for 50–99%, `-30` for <50% (nuclear)
+- Settle-time delta written back to payslip; chart is now accurate
+
 ---
 
 ## Session 16 completed (2026-04-22)
@@ -396,10 +435,13 @@ alter table device_claims disable row level security;
 ### Credit score
 
 - Range 300–850, init 500
-- +10 per payslip for 100% chore completion; −10 for <50%
-- +2 per mandatory chore approved; −5 per rejected
-- +5/+20 early loan repayment; −10 missed scheduled repayment
-- Shown as coloured chip on parent dashboard and child home header
+- At settle: +10 for 100% completion; −2×missed for 50–99%; −30 for <50% (nuclear, no per-chore on top)
+- Pending logs count as done (parent delay doesn't penalise child)
+- Real-time: +2 per mandatory chore approved; −5 per rejected
+- Loan: +5 on-time repayment; +20 loan fully cleared; −10 missed scheduled repayment
+- Vacation: no chore-related credit changes when on vacation
+- Post-settlement score written back to payslip row (accurate historical chart)
+- Shown as coloured chip on parent dashboard and child home header; history chart in STATS + ChildDetail
 
 ---
 
