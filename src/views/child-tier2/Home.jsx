@@ -12,6 +12,7 @@ import { ChevronRight, X, Landmark } from 'lucide-react'
 import CreditScorePopup from '../../components/CreditScorePopup'
 import NetWorthChart from '../../components/NetWorthChart'
 import SavingsGrowthChart from '../../components/SavingsGrowthChart'
+import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 
 // ── Sparkline ─────────────────────────────────────────────────────────────────
 function Sparkline({ data, color }) {
@@ -56,6 +57,46 @@ function Sparkline({ data, color }) {
         strokeLinejoin="round" strokeLinecap="round" />
       <circle cx={last.x} cy={last.y} r={2.5} fill={color} />
     </svg>
+  )
+}
+
+// ── Credit score line chart (shared by child Home + parent ChildDetail) ───────
+export function CreditScoreLineChart({ data }) {
+  const scoreColor = (s) => s >= 700 ? 'var(--positive)' : s >= 500 ? 'var(--warning)' : 'var(--negative)'
+  return (
+    <ResponsiveContainer width="100%" height={130}>
+      <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
+        <defs>
+          <linearGradient id="creditGrad" x1="0" y1="0" x2="1" y2="0">
+            <stop offset="0%"   stopColor="#a855f7" />
+            <stop offset="50%"  stopColor="#60a5fa" />
+            <stop offset="100%" stopColor="#34d399" />
+          </linearGradient>
+        </defs>
+        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+        <XAxis dataKey="label" tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} />
+        <YAxis domain={[300, 850]} tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} width={36} />
+        <Tooltip
+          contentStyle={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'JetBrains Mono', fontSize: 11 }}
+          labelStyle={{ color: 'var(--text-muted)' }}
+          itemStyle={{ color: 'var(--text-primary)' }}
+          formatter={(v) => [v, 'Credit Score']}
+        />
+        <ReferenceLine y={700} stroke="rgba(74,222,128,0.2)"  strokeDasharray="4 4" />
+        <ReferenceLine y={500} stroke="rgba(251,191,36,0.2)" strokeDasharray="4 4" />
+        <Line
+          type="monotone"
+          dataKey="score"
+          stroke="url(#creditGrad)"
+          strokeWidth={2.5}
+          dot={(props) => {
+            const s = props.payload.score
+            return <circle key={props.key} cx={props.cx} cy={props.cy} r={4} fill={scoreColor(s)} stroke="var(--bg-surface)" strokeWidth={1.5} />
+          }}
+          activeDot={{ r: 5, strokeWidth: 0 }}
+        />
+      </LineChart>
+    </ResponsiveContainer>
   )
 }
 
@@ -570,6 +611,14 @@ export default function Tier2Home() {
     return { label, value: p.balancesAfter?.savings ?? 0 }
   })
 
+  const creditChartData = payslips
+    .filter(p => p.creditScore != null)
+    .map(p => {
+      const d = new Date(p.periodEnd + 'T12:00:00')
+      const label = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).toUpperCase().replace(' ', '-')
+      return { label, score: p.creditScore }
+    })
+
   const savingsProjected = (() => {
     const interestRate = (currentMember?.config?.interestRate ?? family?.config?.interestRate) ?? 0.02
     const periodicSavings = projected?.savings ?? 0
@@ -847,6 +896,22 @@ export default function Tier2Home() {
           <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SAVINGS GROWTH</p>
           <SavingsGrowthChart actualData={savingsActual} projected={savingsProjected} />
         </div>
+
+        {/* Credit score history */}
+        {creditChartData.length >= 2 && (
+          <div className="p-4 rounded-xl flex flex-col gap-2"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>CREDIT SCORE</p>
+              <span className="text-xs font-mono" style={{
+                color: (currentMember?.creditScore ?? 500) >= 700 ? 'var(--positive)' : (currentMember?.creditScore ?? 500) >= 500 ? 'var(--warning)' : 'var(--negative)',
+              }}>
+                {currentMember?.creditScore ?? 500}
+              </span>
+            </div>
+            <CreditScoreLineChart data={creditChartData} />
+          </div>
+        )}
 
         {/* Quick actions */}
         <p className="text-xs font-mono px-1 mt-1" style={{ color: 'var(--text-muted)' }}>QUICK ACCESS</p>

@@ -8,7 +8,8 @@ import { displayDate, today } from '../../utils/dates'
 import { ChevronLeft, ChevronDown, ChevronUp, Heart, Target } from 'lucide-react'
 import NetWorthChart from '../../components/NetWorthChart'
 import SpendingBreakdown from '../../components/SpendingBreakdown'
-import { ComposedChart, LineChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
+import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
+import { CreditScoreLineChart } from '../child-tier2/Home'
 
 const TYPE_META = {
   salary:        { label: 'Salary',            emoji: '💼', color: 'var(--positive)' },
@@ -238,8 +239,8 @@ export default function ChildDetail() {
     .filter(p => p.status === 'settled' && p.creditScore != null)
     .sort((a, b) => a.periodEnd.localeCompare(b.periodEnd))
     .map(p => ({
-      period: periodId(p.periodEnd),
-      score:  p.creditScore,
+      label: periodId(p.periodEnd),
+      score: p.creditScore,
     }))
 
   const score = child.creditScore ?? 500
@@ -444,45 +445,17 @@ export default function ChildDetail() {
         {creditChartData.length >= 2 && (
           <div className="flex flex-col gap-2">
             <p className="text-xs font-mono px-1" style={{ color: 'var(--text-muted)' }}>CREDIT SCORE HISTORY</p>
-            <div className="p-4 rounded-xl flex flex-col gap-3"
+            <div className="p-4 rounded-xl flex flex-col gap-2"
               style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
               <div className="flex items-center justify-between">
                 <span className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
                   {creditChartData.length} period{creditChartData.length > 1 ? 's' : ''}
                 </span>
-                <div className="flex items-center gap-3">
-                  <span className="text-xs font-mono" style={{ color: 'var(--positive)' }}>▬ ≥700</span>
-                  <span className="text-xs font-mono" style={{ color: 'var(--warning)' }}>▬ ≥500</span>
-                  <span className="text-xs font-mono" style={{ color: 'var(--negative)' }}>▬ &lt;500</span>
-                </div>
+                <span className="text-xs font-mono" style={{ color: score >= 700 ? 'var(--positive)' : score >= 500 ? 'var(--warning)' : 'var(--negative)' }}>
+                  {score}
+                </span>
               </div>
-              <ResponsiveContainer width="100%" height={150}>
-                <LineChart data={creditChartData} margin={{ top: 8, right: 12, bottom: 0, left: -10 }}>
-                  <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-                  <XAxis dataKey="period" tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} />
-                  <YAxis domain={[300, 850]} tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} width={36} />
-                  <Tooltip
-                    contentStyle={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'JetBrains Mono', fontSize: 11 }}
-                    labelStyle={{ color: 'var(--text-muted)' }}
-                    itemStyle={{ color: 'var(--text-primary)' }}
-                    formatter={(value) => [value, 'Credit Score']}
-                  />
-                  <ReferenceLine y={700} stroke="rgba(74,222,128,0.25)"  strokeDasharray="4 4" />
-                  <ReferenceLine y={500} stroke="rgba(251,191,36,0.25)" strokeDasharray="4 4" />
-                  <Line
-                    type="monotone"
-                    dataKey="score"
-                    stroke="#60a5fa"
-                    strokeWidth={2}
-                    dot={(props) => {
-                      const s = props.payload.score
-                      const c = s >= 700 ? 'var(--positive)' : s >= 500 ? 'var(--warning)' : 'var(--negative)'
-                      return <circle key={props.key} cx={props.cx} cy={props.cy} r={4} fill={c} stroke="none" />
-                    }}
-                    activeDot={{ r: 5, strokeWidth: 0 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
+              <CreditScoreLineChart data={creditChartData} />
             </div>
           </div>
         )}
