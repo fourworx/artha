@@ -259,7 +259,7 @@ function GiveMoneySheet({ child, onDone, onClose }) {
 }
 
 // ── Run / Settle Payslip button ───────────────────────────────────────────────
-function RunPayslipButton({ child, periodEnd, onDone }) {
+function RunPayslipButton({ child, periodEnd, payday, onDone }) {
   const [phase,       setPhase]       = useState('loading') // loading | run | draft | settled
   const [running,     setRunning]     = useState(false)
   const [draftId,     setDraftId]     = useState(null)
@@ -310,6 +310,7 @@ function RunPayslipButton({ child, periodEnd, onDone }) {
   const canRun = today() >= periodEnd
 
   if (phase === 'loading') return null
+  if (phase === 'run' && !payday) return null
   if (phase === 'settled') return (
     <span className="text-xs font-mono" style={{ color: 'var(--positive)' }}>✓ Settled</span>
   )
@@ -710,7 +711,7 @@ export default function ParentDashboard() {
               {/* Actions row */}
               {child.tier >= 2 && (
                 <div className="flex items-center gap-2 mb-3" onClick={e => e.stopPropagation()}>
-                  <RunPayslipButton child={child} periodEnd={periodEnd} onDone={async () => { await reload(); await refreshBanners() }} />
+                  <RunPayslipButton child={child} periodEnd={periodEnd} payday={payday} onDone={async () => { await reload(); await refreshBanners() }} />
                   <button
                     onClick={() => setViewPayslipFor(child)}
                     className="p-1.5 rounded-lg transition-all active:scale-95"
