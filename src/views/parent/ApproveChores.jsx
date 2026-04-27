@@ -6,7 +6,7 @@ import {
   approveBonusChoreLog, approveTier1ChoreLog,
   getPendingRewardRequests, approveRewardRequest, rejectRewardRequest,
   updateCreditScore,
-  getPendingMemberRequests, approveDonation, approveSubGoalWithdrawal, resolveMemberRequest,
+  getPendingMemberRequests, approveDonation, approveSubGoalWithdrawal, approveSpendingWithdrawal, resolveMemberRequest,
 } from '../../db/operations'
 import { displayDate } from '../../utils/dates'
 import { useCurrency } from '../../context/FamilyContext'
@@ -136,6 +136,8 @@ export default function ApproveChores() {
         await approveDonation(req.id, req.memberId, req.amount, req.description)
       } else if (req.type === 'subgoal_withdrawal') {
         await approveSubGoalWithdrawal(req.id, req.memberId, req.amount, req.metadata ?? {})
+      } else if (req.type === 'cash_withdrawal') {
+        await approveSpendingWithdrawal(req.id, req.memberId, req.amount, req.metadata?.destination ?? 'cash')
       }
       setMemberRequests(prev => prev.filter(r => r.id !== req.id))
       await reload()

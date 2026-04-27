@@ -6,7 +6,52 @@ type: project
 
 ## Session 17 completed (2026-04-27)
 
-### Features built / bugs fixed
+### Features built / bugs fixed (continued — end of session)
+
+**Sub-goals visible in savings totals (Home + Savings screen)**
+- `totalSavings = accounts.savings + subGoals.reduce(balance)` now used everywhere
+- Home savings card: shows `totalSavings`, sub-label "incl. X in N goals" when goals exist
+- Savings screen header: shows `totalSavings` with breakdown line showing account vs goal split
+- Savings history chart: uses `balancesAfter.subGoals` from payslip JSON to include sub-goal balances per period
+- Savings projection: uses `totalSavings` as starting balance
+- Interest stats: includes `subGoalInterestEarned` alongside `interestEarned`
+
+**Savings screen — sub-goals section**
+- Shows each sub-goal card: name, balance, target, % progress bar, "Goal reached!" when 100%
+- When sub-goals exist, also shows savings account balance card separately
+- Navigate from Home savings growth card → Savings screen (button → navigate)
+
+**Net Worth breakdown sheet (Home)**
+- Tapping "NET WORTH OVER TIME" card now opens `NetWorthSheet` bottom sheet
+- Shows line-by-line: Wallet, Savings account, each sub-goal (indented with name + balance/target), Sub-goals total, Philanthropy, then Liabilities (loan)
+- Large NET WORTH total at bottom
+
+**CashOutSheet — spending wallet withdrawal request (Home)**
+- "Cash / Bank out" button on Wallet card opens `CashOutSheet`
+- Destinations: Physical Cash / Bank Transfer (with hint labels)
+- Quick amounts + custom input + optional note field
+- Creates `cash_withdrawal` request → parent approves via ApproveChores screen
+- `performSpendingWithdrawal` + `approveSpendingWithdrawal` in operations.js handle the flow
+
+**Cash + Bank withdrawal from sub-goals (GoalJar)**
+- WithdrawSheet in GoalJar now shows Cash and Bank as destination options alongside Spending Wallet and Philanthropy
+- Each shows label + hint sub-text
+- Destinations route through `performSubGoalWithdrawal` (cash/bank branches deduct from goal + log tx, no balance credit — parent hands over physical)
+
+**ApproveChores — cash_withdrawal support**
+- Added `cash_withdrawal` case in `approveMemberReq` → calls `approveSpendingWithdrawal`
+
+### Files changed (session 17 end)
+- `src/views/child-tier2/Home.jsx` — `NetWorthSheet` + `CashOutSheet` components, both rendered; savings growth card `</div>` → `</button>` fix; totalSavings, subGoals computations
+- `src/views/child-tier2/Savings.jsx` — totalSavings header, sub-goals section with progress bars, historyData includes subGoals, projection uses totalSavings, interest stats include subGoalInterestEarned
+- `src/views/child-tier2/GoalJar.jsx` — Cash + Bank withdrawal destinations
+- `src/db/operations.js` — performSpendingWithdrawal, approveSpendingWithdrawal, cash/bank in performSubGoalWithdrawal, updatePayslipCreditScore
+- `src/engine/payslip.js` — settlePayslip writes settled credit score back
+- `src/views/parent/ApproveChores.jsx` — cash_withdrawal case
+
+---
+
+### Features built / bugs fixed (earlier — same session)
 
 **Generate Test History (Backup screen — dev tool)**
 - New purple card in Parent → More → Backup: "Generate Test History"

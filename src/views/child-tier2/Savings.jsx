@@ -18,7 +18,7 @@ const CustomTooltip = ({ active, payload }) => {
 }
 
 export default function Savings() {
-  const { currentMember, refreshMember } = useAuth()
+  const { currentMember } = useAuth()
   const { family } = useFamily()
   const fmt = useCurrency()
   const [payslips, setPayslips] = useState([])
@@ -32,23 +32,39 @@ export default function Savings() {
     })
   }, [currentMember])
 
-  const savings       = currentMember?.accounts?.savings ?? 0
-  const interestRate  = family?.config?.interestRate ?? 0.02
+  const accounts      = currentMember?.accounts ?? {}
+  const savings       = accounts.savings ?? 0
+  const subGoals      = accounts.subGoals ?? []
+  const subGoalTotal  = subGoals.reduce((s, g) => s + (g.balance ?? 0), 0)
+  const totalSavings  = savings + subGoalTotal
+
+  const interestRate  = (currentMember?.config?.interestRate ?? family?.config?.interestRate) ?? 0.02
   const autoSave      = family?.config?.autoSavePercent ?? 0.20
-  const weeklyDeposit = Math.round((currentMember?.baseSalary ?? 0) * autoSave * 0.7) // rough estimate after deductions
+  const weeklyDeposit = Math.round((currentMember?.baseSalary ?? 0) * autoSave * 0.7)
 
-  // History chart: savings deposited + interest per payslip
-  const historyData = payslips.slice(-8).map(p => ({
-    date: shortDate(p.periodEnd),
-    savings: p.balancesAfter?.savings ?? 0,
-  }))
+  // History chart: total savings (savings account + sub-goals) per payslip
+  const settledPayslips = payslips
+    .filter(p => p.status === 'settled')
+    .sort((a, b) => a.periodEnd.localeCompare(b.periodEnd))
 
-  // Projection from current balance
-  const projectionData = projectSavingsGrowth(savings, weeklyDeposit, interestRate, 8)
+  const historyData = settledPayslips.slice(-8).map(p => {
+    const b = p.balancesAfter ?? {}
+    const goalsTotal = (b.subGoals ?? []).reduce((s, g) => s + (g.balance ?? 0), 0)
+    return {
+      date: shortDate(p.periodEnd),
+      savings: (b.savings ?? 0) + goalsTotal,
+    }
+  })
+
+  // Projection from totalSavings as base
+  const projectionData = projectSavingsGrowth(totalSavings, weeklyDeposit, interestRate, 8)
     .map(p => ({ week: `W+${p.week}`, balance: p.balance }))
 
-  const totalInterestEarned = payslips.reduce((sum, p) => sum + (p.interestEarned ?? 0), 0)
-  const lastPayslip = payslips[payslips.length - 1]
+  const totalInterestEarned = payslips.reduce((sum, p) => {
+    return sum + (p.interestEarned ?? 0) + (p.subGoalInterestEarned ?? 0)
+  }, 0)
+  const lastPayslip = settledPayslips[settledPayslips.length - 1]
+  const lastInterest = (lastPayslip?.interestEarned ?? 0) + (lastPayslip?.subGoalInterestEarned ?? 0)
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: '100%' }}>
@@ -56,10 +72,15 @@ export default function Savings() {
       <div className="px-4 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
         <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>MY SAVINGS</p>
         <p className="text-3xl font-mono font-bold mt-0.5" style={{ color: 'var(--accent-blue)' }}>
-          {fmt(savings)}
+          {fmt(totalSavings)}
         </p>
+        {subGoals.length > 0 && (
+          <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>
+            {fmt(savings)} account + {fmt(subGoalTotal)} in {subGoals.length} goal{subGoals.length > 1 ? 's' : ''}
+          </p>
+        )}
         <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
-          {+(interestRate * 100).toFixed(2)}% interest/week · auto-save {+(autoSave * 100).toFixed(2)}% of net pay
+          {+(interestRate * 100).toFixed(2)}% interest/period · auto-save {+(autoSave * 100).toFixed(2)}% of net pay
         </p>
       </div>
 
@@ -73,12 +94,70 @@ export default function Savings() {
             </p>
           </div>
           <div className="p-3 rounded-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>LAST WEEK INTEREST</p>
+            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>LAST PERIOD INTEREST</p>
             <p className="text-lg font-mono font-bold mt-1" style={{ color: 'var(--positive)' }}>
-              {fmt(lastPayslip?.interestEarned ?? 0)}
+              {fmt(lastInterest)}
             </p>
           </div>
         </div>
+
+        {/* Sub-goals breakdown */}
+        {subGoals.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SAVINGS GOALS</p>
+            <div className="flex flex-col gap-2">
+              {subGoals.map(g => {
+                const pct = g.target > 0 ? Math.min(100, Math.round((g.balance / g.target) * 100)) : 0
+                return (
+                  <div key={g.id} className="p-3 rounded-xl flex flex-col gap-2"
+                    style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+                        {g.name}
+                      </span>
+                      <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                        {pct}%
+                      </span>
+                    </div>
+                    <div className="flex items-center justify-between">
+                      <span className="text-base font-mono font-bold" style={{ color: '#818cf8' }}>
+                        {fmt(g.balance)}
+                      </span>
+                      <span className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
+                        / {fmt(g.target)} target
+                      </span>
+                    </div>
+                    {/* Progress bar */}
+                    <div className="w-full rounded-full" style={{ height: 4, background: 'var(--bg-raised)' }}>
+                      <div className="rounded-full" style={{
+                        height: 4,
+                        width: `${pct}%`,
+                        background: pct >= 100 ? 'var(--positive)' : '#818cf8',
+                        transition: 'width 0.3s ease',
+                      }} />
+                    </div>
+                    {pct >= 100 && (
+                      <p className="text-xs font-mono" style={{ color: 'var(--positive)' }}>
+                        🎉 Goal reached! You can now withdraw.
+                      </p>
+                    )}
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Main savings account balance (when sub-goals exist, show separately) */}
+        {subGoals.length > 0 && (
+          <div className="p-3 rounded-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SAVINGS ACCOUNT</p>
+            <p className="text-lg font-mono font-bold mt-1" style={{ color: '#60a5fa' }}>{fmt(savings)}</p>
+            <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>
+              Interest earned on this + all sub-goals
+            </p>
+          </div>
+        )}
 
         {/* Savings history chart */}
         {historyData.length > 1 && (
@@ -105,7 +184,7 @@ export default function Savings() {
 
         {/* Projection chart */}
         <div className="flex flex-col gap-2">
-          <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>8-WEEK PROJECTION</p>
+          <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>8-PERIOD PROJECTION</p>
           <div className="p-3 rounded-xl" style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <ResponsiveContainer width="100%" height={120}>
               <AreaChart data={projectionData} margin={{ top: 4, right: 4, bottom: 0, left: -20 }}>
@@ -122,7 +201,7 @@ export default function Savings() {
               </AreaChart>
             </ResponsiveContainer>
             <p className="text-xs font-mono mt-1 text-center" style={{ color: 'var(--text-dim)' }}>
-              Projected: {fmt(projectionData[projectionData.length - 1]?.balance ?? savings)} in 8 weeks
+              Projected: {fmt(projectionData[projectionData.length - 1]?.balance ?? totalSavings)} in 8 periods
             </p>
           </div>
         </div>

@@ -909,6 +909,10 @@ async function performSubGoalWithdrawal(memberId, amount, metadata) {
     )
     const destGoal = subGoals.find(sg => sg.id === metadata.destinationSubGoalId)
     txDescription = `Transfer from "${goal.name}" to "${destGoal?.name ?? 'goal'}"`
+  } else if (metadata.destination === 'cash') {
+    txDescription = `Cash withdrawal from "${goal.name}"`
+  } else if (metadata.destination === 'bank') {
+    txDescription = `Bank transfer from "${goal.name}"`
   }
 
   await updateMemberAccounts(memberId, newAccounts)
@@ -927,6 +931,26 @@ export async function approveSubGoalWithdrawal(requestId, memberId, amount, meta
 
 export async function parentSubGoalWithdrawal(memberId, amount, metadata) {
   await performSubGoalWithdrawal(memberId, amount, metadata)
+}
+
+// ── Spending wallet cash / bank withdrawal ────────────────────────────────────
+async function performSpendingWithdrawal(memberId, amount, destination) {
+  const member = await getMember(memberId)
+  if (!member) throw new Error('Member not found')
+  const spending = member.accounts.spending ?? 0
+  if (amount > spending) throw new Error(`Insufficient wallet balance (${spending} available)`)
+  await updateMemberAccounts(memberId, { ...member.accounts, spending: spending - amount })
+  await addTransaction({
+    id: crypto.randomUUID(), memberId,
+    type: 'withdrawal', amount: -amount,
+    description: destination === 'bank' ? 'Bank transfer from wallet' : 'Cash withdrawal from wallet',
+    date: today(), relatedId: null,
+  })
+}
+
+export async function approveSpendingWithdrawal(requestId, memberId, amount, destination) {
+  await performSpendingWithdrawal(memberId, amount, destination)
+  await resolveMemberRequest(requestId, 'approved')
 }
 
 // ── Per-child economic config ─────────────────────────────────────────────────

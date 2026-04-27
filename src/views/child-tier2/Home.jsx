@@ -476,6 +476,241 @@ function SpendingSheet({ memberId, onClose, fmt }) {
   )
 }
 
+// ── Net Worth breakdown sheet ──────────────────────────────────────────────────
+function NetWorthSheet({ accounts, subGoals, subGoalTotal, totalSavings, fmt, onClose }) {
+  const spending    = accounts.spending ?? 0
+  const savings     = accounts.savings ?? 0
+  const philanthropy = accounts.philanthropy ?? 0
+  const loan        = accounts.loan?.outstanding ?? 0
+  const netWorth    = spending + totalSavings + philanthropy - loan
+
+  const Row = ({ label, value, color, indent = false, sub = false }) => (
+    <div className={`flex items-center justify-between py-2 ${indent ? 'pl-6' : ''}`}
+      style={{ borderBottom: '1px solid var(--border)' }}>
+      <span style={{
+        fontFamily: 'monospace', fontSize: sub ? 10 : 12,
+        color: sub ? 'var(--text-dim)' : 'var(--text-muted)',
+      }}>{label}</span>
+      <span style={{
+        fontFamily: 'monospace', fontSize: sub ? 10 : 12, fontWeight: 600,
+        color: color ?? 'var(--text-primary)',
+      }}>{value}</span>
+    </div>
+  )
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end"
+      style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="rounded-t-2xl flex flex-col"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', maxHeight: '80vh' }}>
+        <div className="flex justify-center pt-3 pb-1 shrink-0">
+          <div className="w-10 h-1 rounded-full" style={{ background: 'var(--border-bright)' }} />
+        </div>
+        <div className="flex items-center justify-between px-4 py-3 shrink-0"
+          style={{ borderBottom: '1px solid var(--border)' }}>
+          <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Net Worth Breakdown
+          </span>
+          <button onClick={onClose} style={{ color: 'var(--text-muted)', background: 'none', border: 'none' }}>
+            <X size={18} />
+          </button>
+        </div>
+        <div className="overflow-y-auto px-4 py-3 flex flex-col">
+          {/* Assets */}
+          <p className="text-xs font-mono mb-1" style={{ color: 'var(--text-dim)' }}>ASSETS</p>
+          <Row label="Spending wallet"  value={fmt(spending)}     color="var(--positive)" />
+          <Row label="Savings account"  value={fmt(savings)}      color="#60a5fa" />
+          {subGoals.map(g => (
+            <Row key={g.id}
+              label={`↳ ${g.name}`}
+              value={`${fmt(g.balance)} / ${fmt(g.target)}`}
+              color="#818cf8" indent sub />
+          ))}
+          {subGoals.length > 0 && (
+            <Row label="Sub-goals total" value={fmt(subGoalTotal)} color="#818cf8" indent />
+          )}
+          <Row label="Philanthropy"     value={fmt(philanthropy)} color="#D4A017" />
+
+          {/* Liabilities */}
+          {loan > 0 && (
+            <>
+              <p className="text-xs font-mono mt-3 mb-1" style={{ color: 'var(--text-dim)' }}>LIABILITIES</p>
+              <Row label="Loan outstanding" value={`−${fmt(loan)}`} color="var(--negative)" />
+            </>
+          )}
+
+          {/* Net total */}
+          <div className="flex items-center justify-between mt-4 px-3 py-3 rounded-xl"
+            style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-bright)' }}>
+            <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-muted)' }}>NET WORTH</span>
+            <span className="text-lg font-mono font-bold"
+              style={{ color: netWorth >= 0 ? 'var(--positive)' : 'var(--negative)' }}>
+              {fmt(netWorth)}
+            </span>
+          </div>
+          <div className="h-4" />
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── Cash / Bank out sheet (spending wallet withdrawal request) ─────────────────
+function CashOutSheet({ spending, memberId, onClose, fmt }) {
+  const [dest,    setDest]    = useState('cash')
+  const [amount,  setAmount]  = useState('')
+  const [note,    setNote]    = useState('')
+  const [saving,  setSaving]  = useState(false)
+  const [done,    setDone]    = useState(false)
+  const [error,   setError]   = useState('')
+
+  const max    = spending
+  const parsed = Math.min(Number(amount) || 0, max)
+
+  const DEST_OPTIONS = [
+    { id: 'cash', label: 'Physical Cash', hint: 'Parent hands you cash' },
+    { id: 'bank', label: 'Bank Transfer', hint: 'Transferred to your bank' },
+  ]
+
+  const handleSubmit = async () => {
+    if (!parsed || parsed <= 0) { setError('Enter a valid amount'); return }
+    setSaving(true); setError('')
+    try {
+      await addMemberRequest({
+        id: crypto.randomUUID(),
+        familyId: FAMILY_ID,
+        memberId,
+        type: 'cash_withdrawal',
+        amount: parsed,
+        description: `Wallet withdrawal — ${dest === 'cash' ? 'Physical cash' : 'Bank transfer'}${note.trim() ? ': ' + note.trim() : ''}`,
+        metadata: { destination: dest, note: note.trim() },
+        requestedAt: Date.now(),
+      })
+      setDone(true)
+    } catch (e) { setError(e.message) }
+    finally { setSaving(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col justify-end"
+      style={{ background: 'rgba(0,0,0,0.6)' }}
+      onClick={e => e.target === e.currentTarget && onClose()}>
+      <div className="rounded-t-2xl flex flex-col"
+        style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        <div className="flex justify-center pt-3 pb-1">
+          <div className="w-10 h-1 rounded-full" style={{ background: 'var(--border-bright)' }} />
+        </div>
+        <div className="flex items-center justify-between px-4 py-3"
+          style={{ borderBottom: '1px solid var(--border)' }}>
+          <span className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+            Withdraw from Wallet
+          </span>
+          <button onClick={onClose} style={{ color: 'var(--text-muted)', background: 'none', border: 'none' }}>
+            <X size={18} />
+          </button>
+        </div>
+
+        {done ? (
+          <div className="flex flex-col items-center justify-center py-10 gap-3 px-4">
+            <span className="text-5xl">💸</span>
+            <p className="text-sm font-mono font-semibold" style={{ color: 'var(--positive)' }}>Request sent!</p>
+            <p className="text-xs font-mono text-center" style={{ color: 'var(--text-muted)' }}>
+              Your parent will approve and hand over the {dest === 'cash' ? 'cash' : 'bank transfer'}.
+            </p>
+            <button onClick={onClose}
+              className="w-full py-3 rounded-xl text-sm font-mono font-semibold mt-2"
+              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}>
+              Close
+            </button>
+          </div>
+        ) : (
+          <div className="px-4 py-4 flex flex-col gap-4">
+            {/* Balance */}
+            <div className="p-2.5 rounded-lg" style={{ background: 'var(--bg-raised)' }}>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>WALLET BALANCE</p>
+              <p className="text-base font-mono font-bold mt-0.5" style={{ color: 'var(--positive)' }}>{fmt(max)}</p>
+            </div>
+
+            {/* Destination */}
+            <div className="flex gap-2">
+              {DEST_OPTIONS.map(opt => (
+                <button key={opt.id} onClick={() => setDest(opt.id)}
+                  className="flex-1 py-2.5 px-2 rounded-xl flex flex-col items-start gap-0.5 transition-all"
+                  style={{
+                    background: dest === opt.id ? 'rgba(96,165,250,0.12)' : 'var(--bg-raised)',
+                    border: `1px solid ${dest === opt.id ? 'rgba(96,165,250,0.4)' : 'var(--border)'}`,
+                  }}>
+                  <span style={{ fontSize: 12, fontFamily: 'monospace', fontWeight: 600,
+                    color: dest === opt.id ? '#60a5fa' : 'var(--text-primary)' }}>
+                    {opt.label}
+                  </span>
+                  <span style={{ fontSize: 9, fontFamily: 'monospace', color: 'var(--text-dim)' }}>
+                    {opt.hint}
+                  </span>
+                </button>
+              ))}
+            </div>
+
+            {/* Amount */}
+            <div className="flex flex-col gap-2">
+              <div className="flex gap-2">
+                {[25, 50, 100, 200].filter(v => v <= max).map(v => (
+                  <button key={v} onClick={() => setAmount(String(v))}
+                    className="flex-1 py-2 rounded-lg text-xs font-mono font-semibold transition-all"
+                    style={{
+                      background: amount === String(v) ? 'rgba(96,165,250,0.12)' : 'var(--bg-raised)',
+                      border: `1px solid ${amount === String(v) ? 'rgba(96,165,250,0.3)' : 'var(--border)'}`,
+                      color: amount === String(v) ? '#60a5fa' : 'var(--text-muted)',
+                    }}>{fmt(v)}</button>
+                ))}
+              </div>
+              <input type="number" min={1} max={max} value={amount}
+                onChange={e => setAmount(e.target.value)}
+                placeholder="Custom amount"
+                className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+              />
+            </div>
+
+            {/* Optional note */}
+            <div className="flex flex-col gap-1">
+              <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>NOTE (optional)</label>
+              <input value={note} onChange={e => setNote(e.target.value)}
+                placeholder="e.g. Road trip spending money"
+                className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+              />
+            </div>
+
+            {parsed > 0 && (
+              <div className="flex items-center justify-between px-3 py-2 rounded-lg"
+                style={{ background: 'rgba(96,165,250,0.06)', border: '1px solid rgba(96,165,250,0.2)' }}>
+                <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Wallet after approval</span>
+                <span className="text-xs font-mono font-semibold" style={{ color: '#60a5fa' }}>
+                  {fmt(max - parsed)} left
+                </span>
+              </div>
+            )}
+
+            {error && <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{error}</p>}
+
+            <button onClick={handleSubmit} disabled={saving || !parsed}
+              className="w-full py-3 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
+              style={{
+                background: saving || !parsed ? 'var(--border)' : 'rgba(96,165,250,0.15)',
+                border: '1px solid rgba(96,165,250,0.3)',
+                color: saving || !parsed ? 'var(--text-dim)' : '#60a5fa',
+              }}>
+              {saving ? 'Sending...' : `Request ${parsed ? fmt(parsed) : '—'} withdrawal`}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  )
+}
+
 export default function Tier2Home() {
   const { currentMember, refreshMember } = useAuth()
   const { family } = useFamily()
@@ -488,6 +723,8 @@ export default function Tier2Home() {
   const [showPrepay,      setShowPrepay]      = useState(false)
   const [showDonate,      setShowDonate]      = useState(false)
   const [showSpending,    setShowSpending]    = useState(false)
+  const [showNetWorth,    setShowNetWorth]    = useState(false)
+  const [showCashOut,     setShowCashOut]     = useState(false)
   const [creditPopup,     setCreditPopup]     = useState(null) // { score, prevScore }
   const [latestPayslip,   setLatestPayslip]   = useState(null)
   const [payslips,        setPayslips]        = useState([])
@@ -610,6 +847,9 @@ export default function Tier2Home() {
   const accounts        = currentMember?.accounts ?? {}
   const philanthropy    = accounts.philanthropy ?? 0
   const loanOutstanding = accounts.loan?.outstanding ?? 0
+  const subGoals        = accounts.subGoals ?? []
+  const subGoalTotal    = subGoals.reduce((s, g) => s + (g.balance ?? 0), 0)
+  const totalSavings    = (accounts.savings ?? 0) + subGoalTotal
 
   // ── Hero card data ───────────────────────────────────────────────────────────
   // Wallet sparkline: spending balance per settled payslip
@@ -642,13 +882,17 @@ export default function Tier2Home() {
   // ── Chart data ───────────────────────────────────────────────────────────────
   const netWorthData = payslips.map(p => {
     const b = p.balancesAfter ?? {}
-    const nw = (b.spending ?? 0) + (b.savings ?? 0) + (b.philanthropy ?? 0) - (b.loan?.outstanding ?? 0)
+    const goalsTotal = (b.subGoals ?? []).reduce((s, g) => s + (g.balance ?? 0), 0)
+    const nw = (b.spending ?? 0) + (b.savings ?? 0) + goalsTotal + (b.philanthropy ?? 0) - (b.loan?.outstanding ?? 0)
     const d = new Date(p.periodEnd + 'T12:00:00')
     const label = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).toUpperCase().replace(' ', '-')
     return { label, value: nw }
   })
 
-  const savingsHistory = payslips.map(p => p.balancesAfter?.savings ?? 0)
+  const savingsHistory = payslips.map(p => {
+    const b = p.balancesAfter ?? {}
+    return (b.savings ?? 0) + (b.subGoals ?? []).reduce((s, g) => s + (g.balance ?? 0), 0)
+  })
 
   // Cumulative donations over time: whenever philanthropy balance drops between
   // payslips that means a donation happened. Flat line = not giving = problem.
@@ -666,9 +910,11 @@ export default function Tier2Home() {
   })()
 
   const savingsActual = payslips.map(p => {
+    const b = p.balancesAfter ?? {}
     const d = new Date(p.periodEnd + 'T12:00:00')
     const label = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).toUpperCase().replace(' ', '-')
-    return { label, value: p.balancesAfter?.savings ?? 0 }
+    const goalsTotal = (b.subGoals ?? []).reduce((s, g) => s + (g.balance ?? 0), 0)
+    return { label, value: (b.savings ?? 0) + goalsTotal }
   })
 
   const creditChartData = payslips
@@ -682,7 +928,7 @@ export default function Tier2Home() {
   const savingsProjected = (() => {
     const interestRate = (currentMember?.config?.interestRate ?? family?.config?.interestRate) ?? 0.02
     const periodicSavings = projected?.savings ?? 0
-    let balance = accounts.savings ?? 0
+    let balance = totalSavings
     return Array.from({ length: 8 }, (_, i) => {
       balance = (balance * (1 + interestRate)) + periodicSavings
       return { label: `+${i + 1}`, value: Math.round(balance) }
@@ -762,27 +1008,30 @@ export default function Tier2Home() {
         {/* Hero row: Wallet + Spent */}
         <div className="grid grid-cols-2 gap-3">
           {/* Wallet card */}
-          <button onClick={() => navigate('/child/ledger')}
-            className="p-4 rounded-xl text-left transition-all active:scale-95 flex flex-col"
+          <div className="p-4 rounded-xl flex flex-col"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>WALLET</p>
-            <p className="text-2xl font-mono font-bold mt-1" style={{ color: 'var(--positive)' }}>
-              {fmt(accounts.spending ?? 0)}
-            </p>
-            {walletDelta !== null && (
-              <p className="text-xs font-mono mt-1" style={{
-                color: walletDelta >= 0 ? 'var(--positive)' : 'var(--negative)',
-              }}>
-                {walletDelta >= 0 ? '+' : ''}{fmt(walletDelta)} since last pay
+            <button onClick={() => navigate('/child/ledger')} className="text-left flex-1">
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>WALLET</p>
+              <p className="text-2xl font-mono font-bold mt-1" style={{ color: 'var(--positive)' }}>
+                {fmt(accounts.spending ?? 0)}
               </p>
-            )}
-            <div className="mt-2 -mx-1">
-              <Sparkline data={walletHistory} color="#4ade80" />
-            </div>
-            <p className="text-xs font-mono mt-1 flex items-center gap-0.5" style={{ color: 'var(--text-dim)' }}>
-              View history <ChevronRight size={11} />
-            </p>
-          </button>
+              {walletDelta !== null && (
+                <p className="text-xs font-mono mt-1" style={{
+                  color: walletDelta >= 0 ? 'var(--positive)' : 'var(--negative)',
+                }}>
+                  {walletDelta >= 0 ? '+' : ''}{fmt(walletDelta)} since last pay
+                </p>
+              )}
+              <div className="mt-2 -mx-1">
+                <Sparkline data={walletHistory} color="#4ade80" />
+              </div>
+            </button>
+            <button onClick={() => setShowCashOut(true)}
+              className="mt-2 w-full py-1.5 rounded-lg text-xs font-mono font-semibold transition-all active:scale-95"
+              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-bright)', color: 'var(--text-muted)' }}>
+              Cash / Bank out
+            </button>
+          </div>
 
           {/* Spent card */}
           <button onClick={() => setShowSpending(true)}
@@ -814,8 +1063,13 @@ export default function Tier2Home() {
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SAVINGS</p>
             <p className="text-2xl font-mono font-bold mt-1" style={{ color: '#1E3A8A' }}>
-              {fmt(accounts.savings ?? 0)}
+              {fmt(totalSavings)}
             </p>
+            {subGoals.length > 0 && (
+              <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>
+                incl. {fmt(subGoalTotal)} in {subGoals.length} goal{subGoals.length > 1 ? 's' : ''}
+              </p>
+            )}
             <p className="text-xs font-mono mt-1" style={{ color: 'var(--text-muted)' }}>
               {+(((currentMember?.config?.interestRate ?? family?.config?.interestRate) ?? 0.02) * 100).toFixed(2)}%/{periodLabel} interest
             </p>
@@ -944,18 +1198,23 @@ export default function Tier2Home() {
         </button>
 
         {/* Net worth over time */}
-        <div className="p-4 rounded-xl flex flex-col gap-2"
+        <button onClick={() => setShowNetWorth(true)} className="p-4 rounded-xl flex flex-col gap-2 w-full text-left transition-all active:scale-95"
           style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-          <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>NET WORTH OVER TIME</p>
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>NET WORTH OVER TIME</p>
+            <span className="text-xs font-mono flex items-center gap-0.5" style={{ color: 'var(--text-dim)' }}>
+              breakdown <ChevronRight size={11} />
+            </span>
+          </div>
           <NetWorthChart data={netWorthData} />
-        </div>
+        </button>
 
         {/* Savings growth + projection */}
-        <div className="p-4 rounded-xl flex flex-col gap-2"
+        <button onClick={() => navigate('/child/savings')} className="p-4 rounded-xl flex flex-col gap-2 w-full text-left transition-all active:scale-95"
           style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
           <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SAVINGS GROWTH</p>
           <SavingsGrowthChart actualData={savingsActual} projected={savingsProjected} />
-        </div>
+        </button>
 
         {/* Credit score history */}
         {creditChartData.length >= 2 && (
@@ -1025,6 +1284,26 @@ export default function Tier2Home() {
           score={creditPopup.score}
           prevScore={creditPopup.prevScore}
           onDismiss={handleDismissCredit}
+        />
+      )}
+
+      {showNetWorth && (
+        <NetWorthSheet
+          accounts={accounts}
+          subGoals={subGoals}
+          subGoalTotal={subGoalTotal}
+          totalSavings={totalSavings}
+          fmt={fmt}
+          onClose={() => setShowNetWorth(false)}
+        />
+      )}
+
+      {showCashOut && (
+        <CashOutSheet
+          spending={accounts.spending ?? 0}
+          memberId={currentMember.id}
+          fmt={fmt}
+          onClose={() => setShowCashOut(false)}
         />
       )}
     </div>

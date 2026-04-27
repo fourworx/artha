@@ -366,9 +366,11 @@ function WithdrawSheet({ goal, subGoals, onSubmit, onClose, fmt }) {
             <div className="flex flex-col gap-2">
               <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>MOVE TO</label>
               {[
-                { id: 'spending',     label: 'Spending wallet' },
-                { id: 'philanthropy', label: 'Philanthropy' },
-                ...(otherGoals.length > 0 ? [{ id: 'subgoal', label: 'Another goal' }] : []),
+                { id: 'spending',     label: 'Spending wallet',   hint: 'Use in-app' },
+                { id: 'cash',         label: 'Cash (physical)',   hint: 'Parent hands you cash' },
+                { id: 'bank',         label: 'Bank transfer',     hint: 'Parent transfers to your account' },
+                { id: 'philanthropy', label: 'Philanthropy',      hint: 'Donate it' },
+                ...(otherGoals.length > 0 ? [{ id: 'subgoal', label: 'Another goal', hint: 'Move between goals' }] : []),
               ].map(opt => (
                 <button key={opt.id} onClick={() => { setDestination(opt.id); setDestGoalId('') }}
                   className="flex items-center gap-2 px-3 py-2.5 rounded-xl w-full text-left transition-all"
@@ -382,9 +384,14 @@ function WithdrawSheet({ goal, subGoals, onSubmit, onClose, fmt }) {
                       <div className="w-2 h-2 rounded-full" style={{ background: 'var(--positive)' }} />
                     )}
                   </div>
-                  <span className="text-xs font-mono" style={{ color: destination === opt.id ? 'var(--positive)' : 'var(--text-primary)' }}>
-                    {opt.label}
-                  </span>
+                  <div className="flex flex-col min-w-0">
+                    <span className="text-xs font-mono" style={{ color: destination === opt.id ? 'var(--positive)' : 'var(--text-primary)' }}>
+                      {opt.label}
+                    </span>
+                    {opt.hint && (
+                      <span className="text-xs font-mono" style={{ color: 'var(--text-dim)', fontSize: 9 }}>{opt.hint}</span>
+                    )}
+                  </div>
                 </button>
               ))}
               {destination === 'subgoal' && otherGoals.length > 0 && (
