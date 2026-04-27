@@ -602,6 +602,13 @@ export async function updatePayslipStatus(payslipId, status) {
     .eq('id', payslipId))
 }
 
+export async function updatePayslipCreditScore(payslipId, score) {
+  throwIfError(await supabase
+    .from('payslips')
+    .update({ credit_score: score })
+    .eq('id', payslipId))
+}
+
 // Returns draft payslips from previous periods (genuinely forgotten, not current-period pre-runs)
 export async function getOverdueDrafts(memberIds, currentPeriodEnd) {
   if (!memberIds.length) return []

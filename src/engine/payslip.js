@@ -3,7 +3,7 @@ import {
   getMember, getFamily, getChores,
   getChoreLogsForPeriod, getUtilityCharges,
   addPayslip, updateMemberAccounts, updateTaxFund, addTransaction, updateCreditScore,
-  getPayslipForPeriod, getPayslip, updatePayslipStatus,
+  getPayslipForPeriod, getPayslip, updatePayslipStatus, updatePayslipCreditScore,
 } from '../db/operations'
 import { roundRupees } from '../utils/currency'
 import { currentPeriodStart, currentPeriodEnd, daysAgo } from '../utils/dates'
@@ -478,10 +478,16 @@ export async function settlePayslip(payslipId) {
     }
   }
 
+  const currentScore   = member.creditScore ?? 500
+  const settledScore   = Math.min(850, Math.max(300, Math.round(currentScore + scoreDelta)))
+
   if (scoreDelta !== 0) {
     await updateCreditScore(ps.memberId, scoreDelta).catch(() => {})
   }
 
-  // ── Mark settled ─────────────────────────────────────────────────
-  await updatePayslipStatus(payslipId, 'settled')
+  // ── Mark settled, writing post-settlement credit score to the payslip ──
+  await Promise.all([
+    updatePayslipStatus(payslipId, 'settled'),
+    updatePayslipCreditScore(payslipId, settledScore),
+  ])
 }
