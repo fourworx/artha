@@ -790,6 +790,11 @@ export default function Tier2Home() {
         ? { ...family.config, ...currentMember.config }
         : family.config
 
+      // Use last settled payslip's closing balance as opening for interest (prevents gaming)
+      const lastSettled   = payslips[payslips.length - 1]
+      const openingSavings  = lastSettled?.balancesAfter?.savings  ?? null
+      const openingSubGoals = lastSettled?.balancesAfter?.subGoals ?? null
+
       const calc = calculatePayslip({
         member: currentMember,
         familyConfig: effectiveConfig,
@@ -799,6 +804,8 @@ export default function Tier2Home() {
         periodStart: progressPeriodStart,
         periodEnd:   progressPeriodEnd,
         streakDays,
+        openingSavings,
+        openingSubGoals,
       })
 
       // ── Mandatory % over FULL period (all days, not just days with logs) ──
@@ -855,6 +862,8 @@ export default function Tier2Home() {
   const subGoals        = accounts.subGoals ?? []
   const subGoalTotal    = subGoals.reduce((s, g) => s + (g.balance ?? 0), 0)
   const totalSavings    = (accounts.savings ?? 0) + subGoalTotal
+  const interestRate    = (currentMember?.config?.interestRate ?? family?.config?.interestRate) ?? 0.02
+  const walletInterestPotential = Math.round((accounts.spending ?? 0) * interestRate)
 
   // ── Hero card data ───────────────────────────────────────────────────────────
   // Wallet sparkline: spending balance per settled payslip
@@ -1127,63 +1136,66 @@ export default function Tier2Home() {
         )}
 
         {/* Projected earnings widget */}
-        {projected !== null && (
-          <div className="px-3 py-3 rounded-xl flex flex-col gap-2.5"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+        {projected !== null && (() => {
+          const totalEarned    = projected.earnedGross + projected.bonusEarned + (projected.interest ?? 0)
+          const totalPotential = projected.potentialGross + (projected.bonusPotential ?? 0) + (projected.interest ?? 0)
+          const pctColor       = projected.mandatoryPct === 100 ? 'var(--positive)' : 'var(--warning)'
+          const pctBg          = projected.mandatoryPct === 100 ? 'rgba(74,222,128,0.12)' : 'rgba(251,191,36,0.1)'
 
-            <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-              PROJECTED {periodLabel.toUpperCase()} PAY
-            </span>
-
-            {/* Gross earned / potential */}
-            <div className="flex items-baseline gap-1.5">
-              <span className="text-2xl font-mono font-bold" style={{ color: 'var(--positive)' }}>
-                {fmt(projected.earnedGross)}
-              </span>
-              <span className="text-sm font-mono" style={{ color: 'var(--text-muted)' }}>
-                / {fmt(projected.potentialGross)} gross
-              </span>
+          const Frac = ({ top, bot, label, color, flat = false }) => (
+            <div className="flex flex-col items-center" style={{ minWidth: 40 }}>
+              <span style={{ fontSize: 15, fontWeight: 700, fontFamily: 'monospace', color, lineHeight: 1.1 }}>{top}</span>
+              {flat
+                ? <div style={{ height: 4 }} />
+                : <div style={{ width: '100%', height: 1, background: 'var(--border-bright)', margin: '3px 0' }} />
+              }
+              <span style={{ fontSize: 10, fontFamily: 'monospace', color: flat ? 'transparent' : 'var(--text-muted)', lineHeight: 1.1 }}>{flat ? '—' : bot}</span>
+              <span style={{ fontSize: 8, fontFamily: 'monospace', color: 'var(--text-dim)', marginTop: 3, letterSpacing: '0.05em' }}>{label}</span>
             </div>
+          )
+          const Op = ({ ch }) => (
+            <span style={{ fontSize: 13, fontFamily: 'monospace', color: 'var(--text-dim)', alignSelf: 'center', paddingBottom: 12 }}>{ch}</span>
+          )
 
-            {/* Mandatory chore % */}
-            <span className="text-xs font-mono px-2 py-0.5 rounded-full self-start"
-              style={{
-                background: projected.mandatoryPct === 100 ? 'rgba(74,222,128,0.12)' : 'rgba(251,191,36,0.1)',
-                color: projected.mandatoryPct === 100 ? 'var(--positive)' : 'var(--warning)',
-              }}>
-              {projected.mandatoryPct}% mandatory chores complete
-            </span>
+          return (
+            <div className="px-3 py-3 rounded-xl flex flex-col gap-3"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
 
-            {/* Streak bonus */}
-            {projected.streakBonus > 0 && (
-              <p className="text-xs font-mono" style={{ color: 'var(--warning)' }}>
-                🔥 +{fmt(projected.streakBonus)} streak bonus
-              </p>
-            )}
+              <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
+                PROJECTED {periodLabel.toUpperCase()} PAY
+              </span>
 
-            {/* Bonus chores */}
-            {projected.bonusPotential > 0 && (
-              <div className="flex items-center justify-between px-3 py-2 rounded-lg"
-                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)' }}>
-                <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>⚡ BONUS CHORES</span>
-                <span className="text-xs font-mono font-semibold" style={{ color: 'var(--warning)' }}>
-                  {fmt(projected.bonusEarned)} / {fmt(projected.bonusPotential)}
-                </span>
+              {/* Equation row */}
+              <div className="flex items-start gap-2 flex-wrap">
+                <Frac top={fmt(projected.earnedGross)} bot={fmt(projected.potentialGross)} label="CHORES" color={pctColor} />
+                {projected.bonusPotential > 0 && <>
+                  <Op ch="+" />
+                  <Frac top={fmt(projected.bonusEarned)} bot={fmt(projected.bonusPotential)} label="BONUS" color="var(--warning)" />
+                </>}
+                {(projected.interest ?? 0) > 0 && <>
+                  <Op ch="+" />
+                  <Frac top={fmt(projected.interest)} bot="—" label="INTEREST" color="#60a5fa" flat />
+                </>}
+                <Op ch="=" />
+                <Frac top={fmt(totalEarned)} bot={fmt(totalPotential)} label="TOTAL" color="var(--positive)" />
               </div>
-            )}
 
-            {/* Interest */}
-            {projected.interest > 0 && (
-              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-                + {fmt(projected.interest)} interest (savings &amp; goals)
-              </p>
-            )}
+              {/* Mandatory % + streak */}
+              <span className="text-xs font-mono px-2 py-0.5 rounded-full self-start"
+                style={{ background: pctBg, color: pctColor }}>
+                {projected.mandatoryPct}% mandatory
+                {projected.streakBonus > 0 ? ` · 🔥 ${streak}d +${fmt(projected.streakBonus)}` : ''}
+              </span>
 
-            <p className="text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
-              If payslip ran right now
-            </p>
-          </div>
-        )}
+              {/* Wallet nudge */}
+              {(accounts.spending ?? 0) > 0 && walletInterestPotential > 0 && (
+                <p className="text-xs font-mono px-2.5 py-2 rounded-lg" style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)' }}>
+                  💡 {fmt(accounts.spending)} in wallet earns {fmt(0)} interest. Move to savings before this period ends to earn ~{fmt(walletInterestPotential)} next period.
+                </p>
+              )}
+            </div>
+          )
+        })()}
 
         {/* ── Stats section ── */}
         <p className="text-xs font-mono px-1 mt-1" style={{ color: 'var(--text-muted)' }}>STATS</p>

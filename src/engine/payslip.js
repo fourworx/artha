@@ -26,6 +26,8 @@ export function calculatePayslip({
   periodStart,
   periodEnd,
   streakDays = 0,
+  openingSavings  = null,   // prev payslip balancesAfter.savings — used for interest (prevents gaming)
+  openingSubGoals = null,   // prev payslip balancesAfter.subGoals
 }) {
   const config = familyConfig
 
@@ -195,15 +197,23 @@ export function calculatePayslip({
   const newLoanOutstanding = Math.max(0, outstandingWithInterest - loanRepayment)
 
   // ── 8. Interest on savings and sub-goals (philanthropy earns no interest) ─
-  const interestEarned      = calculateWeeklyInterest(member.accounts.savings, config.interestRate)
+  // Interest uses the OPENING balance (previous period's closing) to prevent
+  // gaming — e.g. moving wallet→savings on Saturday shouldn't earn a full
+  // week's interest for just 2 days. Falls back to current balance for the
+  // very first payslip (no previous payslip exists).
+  const openingSavingsBase  = openingSavings  !== null ? openingSavings  : member.accounts.savings
   const philanthropyBalance = member.accounts.philanthropy ?? 0
 
-  // Sub-goals: each earns the same interest rate as savings
-  const subGoals      = member.accounts.subGoals ?? []
-  const subGoalsAfter = subGoals.map(sg => ({
-    ...sg,
-    balance: roundRupees(sg.balance + calculateWeeklyInterest(sg.balance, config.interestRate)),
-  }))
+  const interestEarned = calculateWeeklyInterest(openingSavingsBase, config.interestRate)
+
+  // Sub-goals: interest on opening balance; applied to current balance (mid-period deposits ok)
+  const subGoals            = member.accounts.subGoals ?? []
+  const openingSubGoalsBase = openingSubGoals ?? subGoals
+  const subGoalsAfter       = subGoals.map(sg => {
+    const openingSg  = openingSubGoalsBase.find(og => og.id === sg.id)
+    const sgInterest = openingSg ? calculateWeeklyInterest(openingSg.balance, config.interestRate) : 0
+    return { ...sg, balance: roundRupees(sg.balance + sgInterest) }
+  })
   const subGoalInterestEarned = subGoalsAfter.reduce((sum, sg, i) =>
     sum + sg.balance - subGoals[i].balance, 0
   )
@@ -313,6 +323,11 @@ export async function runPayslip(memberId, overridePeriod = null) {
   const existing = await getPayslipForPeriod(memberId, periodEnd)
   if (existing) throw new Error(`Payslip already exists for period ending ${periodEnd}`)
 
+  // ── Load previous settled payslip for opening-balance interest calc ─
+  const prevPayslip    = await getLatestPayslip(memberId).catch(() => null)
+  const openingSavings  = prevPayslip?.status === 'settled' ? (prevPayslip.balancesAfter?.savings  ?? null) : null
+  const openingSubGoals = prevPayslip?.status === 'settled' ? (prevPayslip.balancesAfter?.subGoals ?? null) : null
+
   // ── Calculate ───────────────────────────────────────────────────
   const loanWeeklyRepay = member.accounts.loan?.weeklyRepayment ?? 0
 
@@ -325,6 +340,8 @@ export async function runPayslip(memberId, overridePeriod = null) {
     periodStart,
     periodEnd,
     streakDays,
+    openingSavings,
+    openingSubGoals,
   })
 
   // ── Save as draft (no balance updates yet) ──────────────────────
