@@ -8,22 +8,31 @@ import { useCurrency } from '../../context/FamilyContext'
 // ── Reward form ───────────────────────────────────────────────────────────────
 function RewardForm({ initial, onSave, onClose }) {
   const isEdit = !!initial
-  const [title,    setTitle]    = useState(initial?.title    ?? '')
-  const [price,    setPrice]    = useState(initial?.price    ?? '')
-  const [category, setCategory] = useState(initial?.category ?? 'treat')
-  const [emoji,    setEmoji]    = useState(initial?.emoji    ?? '🎁')
-  const [saving,   setSaving]   = useState(false)
-  const [error,    setError]    = useState('')
+
+  // If the saved category is not a preset key, treat it as a custom string
+  const isPreset = (cat) => cat && Object.keys(REWARD_CATEGORIES).includes(cat)
+  const initCat  = initial?.category ?? 'treat'
+
+  const [title,        setTitle]        = useState(initial?.title ?? '')
+  const [price,        setPrice]        = useState(initial?.price ?? '')
+  const [category,     setCategory]     = useState(isPreset(initCat) ? initCat : 'other')
+  const [customCat,    setCustomCat]    = useState(isPreset(initCat) ? '' : initCat)
+  const [emoji,        setEmoji]        = useState(initial?.emoji ?? '🎁')
+  const [saving,       setSaving]       = useState(false)
+  const [error,        setError]        = useState('')
+
+  const effectiveCategory = category === 'other' ? customCat.trim() : category
 
   const handleSave = async () => {
     if (!title.trim())  { setError('Title required'); return }
     if (!price || Number(price) <= 0) { setError('Price must be > 0'); return }
+    if (category === 'other' && !customCat.trim()) { setError('Enter a category name'); return }
     setSaving(true)
     const data = {
       familyId: FAMILY_ID,
       title: title.trim(),
       price: Number(price),
-      category,
+      category: effectiveCategory,
       emoji,
       isActive: initial?.isActive ?? true,
     }
@@ -96,7 +105,26 @@ function RewardForm({ initial, onSave, onClose }) {
                   <span>{e}</span><span>{label}</span>
                 </button>
               ))}
+              <button onClick={() => setCategory('other')}
+                className="flex items-center gap-2 px-3 py-2 rounded-lg text-xs font-mono transition-all"
+                style={{
+                  background: category === 'other' ? 'var(--accent-blue)' : 'var(--bg-raised)',
+                  border: `1px solid ${category === 'other' ? 'var(--accent-blue)' : 'var(--border)'}`,
+                  color: category === 'other' ? '#fff' : 'var(--text-muted)',
+                }}>
+                <span>✏️</span><span>Other…</span>
+              </button>
             </div>
+            {category === 'other' && (
+              <input
+                autoFocus
+                value={customCat}
+                onChange={e => setCustomCat(e.target.value)}
+                placeholder="e.g. Outdoor, Books, Music…"
+                className="w-full rounded-lg px-3 py-2 text-sm font-mono outline-none"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--accent-blue)', color: 'var(--text-primary)' }}
+              />
+            )}
           </div>
 
           {error && <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{error}</p>}
