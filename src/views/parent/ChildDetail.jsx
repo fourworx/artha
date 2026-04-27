@@ -404,7 +404,7 @@ export default function ChildDetail() {
               style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
               <div className="flex items-center gap-4 text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
                 <span className="flex items-center gap-1">
-                  <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: '#F59E0B' }} />
+                  <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: '#6ee7b7' }} />
                   Earned
                 </span>
                 <span className="flex items-center gap-1">
@@ -432,7 +432,7 @@ export default function ChildDetail() {
                       return [value, name]
                     }}
                   />
-                  <Bar yAxisId="left" dataKey="earned" stackId="a" fill="#4ade80" radius={[0, 0, 3, 3]} />
+                  <Bar yAxisId="left" dataKey="earned" stackId="a" fill="#6ee7b7" radius={[0, 0, 3, 3]} />
                   <Bar yAxisId="left" dataKey="uncaptured" stackId="a" fill="var(--bg-raised)" stroke="var(--border)" strokeWidth={1} radius={[3, 3, 0, 0]} />
                   <Line yAxisId="right" type="monotone" dataKey="pct" stroke="var(--warning)" strokeWidth={2} dot={{ fill: 'var(--warning)', r: 3, strokeWidth: 0 }} />
                 </ComposedChart>
