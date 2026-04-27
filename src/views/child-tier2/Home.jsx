@@ -12,6 +12,8 @@ import { ChevronRight, X, Landmark } from 'lucide-react'
 import CreditScorePopup from '../../components/CreditScorePopup'
 import NetWorthChart from '../../components/NetWorthChart'
 import SavingsGrowthChart from '../../components/SavingsGrowthChart'
+import TopRewardsChart from '../../components/TopRewardsChart'
+import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 
 // ── Sparkline ─────────────────────────────────────────────────────────────────
 function Sparkline({ data, color }) {
@@ -945,6 +947,33 @@ export default function Tier2Home() {
       return { label, score: p.creditScore }
     })
 
+  const pLabel = p => {
+    const d = new Date(p.periodEnd + 'T12:00:00')
+    return d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).toUpperCase().replace(' ', '-')
+  }
+
+  const mandatoryChartData = payslips.map(p => {
+    const earned = p.earnings?.adjustedSalary ?? 0
+    const base   = p.earnings?.baseSalary ?? 0
+    return { period: pLabel(p), earned, uncaptured: Math.max(0, base - earned), pct: base > 0 ? Math.round(earned / base * 100) : 0 }
+  })
+
+  const allocationChartData = payslips.map(p => ({
+    period:      pLabel(p),
+    obligations: (p.deductions?.tax ?? 0) + (p.deductions?.rent ?? 0) + (p.deductions?.totalUtilities ?? 0) + (p.deductions?.loanRepayment ?? 0),
+    savings:     p.allocations?.savings ?? 0,
+    philanthropy: p.allocations?.philanthropy ?? 0,
+    wallet:      p.allocations?.spending ?? 0,
+  }))
+
+  const bonusChartData = payslips
+    .filter(p => (p.bonusPotential ?? 0) > 0)
+    .map(p => {
+      const earned = p.earnings?.bonusChoreEarnings ?? 0
+      const potential = p.bonusPotential ?? 0
+      return { period: pLabel(p), earned, uncaptured: Math.max(0, potential - earned), pct: potential > 0 ? Math.round(earned / potential * 100) : 0 }
+    })
+
   const savingsProjected = (() => {
     const interestRate = (currentMember?.config?.interestRate ?? family?.config?.interestRate) ?? 0.02
     const periodicSavings = projected?.savings ?? 0
@@ -1027,31 +1056,28 @@ export default function Tier2Home() {
 
         {/* Hero row: Wallet + Spent */}
         <div className="grid grid-cols-2 gap-3">
-          {/* Wallet card */}
-          <div className="p-4 rounded-xl flex flex-col"
+          {/* Wallet card — tap → Wallet screen (spend + transfer) */}
+          <button onClick={() => navigate('/child/wallet')}
+            className="p-4 rounded-xl flex flex-col text-left transition-all active:scale-95"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-            <button onClick={() => navigate('/child/ledger')} className="text-left flex-1">
-              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>WALLET</p>
-              <p className="text-2xl font-mono font-bold mt-1" style={{ color: 'var(--positive)' }}>
-                {fmt(accounts.spending ?? 0)}
+            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>WALLET</p>
+            <p className="text-2xl font-mono font-bold mt-1" style={{ color: 'var(--positive)' }}>
+              {fmt(accounts.spending ?? 0)}
+            </p>
+            {walletDelta !== null && (
+              <p className="text-xs font-mono mt-1" style={{
+                color: walletDelta >= 0 ? 'var(--positive)' : 'var(--negative)',
+              }}>
+                {walletDelta >= 0 ? '+' : ''}{fmt(walletDelta)} since last pay
               </p>
-              {walletDelta !== null && (
-                <p className="text-xs font-mono mt-1" style={{
-                  color: walletDelta >= 0 ? 'var(--positive)' : 'var(--negative)',
-                }}>
-                  {walletDelta >= 0 ? '+' : ''}{fmt(walletDelta)} since last pay
-                </p>
-              )}
-              <div className="mt-2 -mx-1">
-                <Sparkline data={walletHistory} color="#4ade80" />
-              </div>
-            </button>
-            <button onClick={() => setShowCashOut(true)}
-              className="mt-2 w-full py-1.5 rounded-lg text-xs font-mono font-semibold transition-all active:scale-95"
-              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border-bright)', color: 'var(--text-muted)' }}>
-              Cash / Bank out
-            </button>
-          </div>
+            )}
+            <div className="mt-2 -mx-1">
+              <Sparkline data={walletHistory} color="#4ade80" />
+            </div>
+            <p className="text-xs font-mono mt-1 flex items-center gap-0.5" style={{ color: 'var(--text-dim)' }}>
+              Spend &amp; transfer <ChevronRight size={11} />
+            </p>
+          </button>
 
           {/* Spent card */}
           <button onClick={() => setShowSpending(true)}
@@ -1270,6 +1296,107 @@ export default function Tier2Home() {
               </span>
             </div>
             <CreditScoreLineChart data={creditChartData} />
+          </div>
+        )}
+
+        {/* Salary captured vs max */}
+        {mandatoryChartData.length > 0 && (
+          <div className="p-4 rounded-xl flex flex-col gap-3"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <div>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SALARY CAPTURED VS MAX</p>
+              <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>How much of your possible salary you earned each period</p>
+            </div>
+            <div className="flex items-center gap-4 text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
+              <span className="flex items-center gap-1"><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: '#6ee7b7' }} />Earned</span>
+              <span className="flex items-center gap-1"><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: 'var(--bg-raised)', border: '1px solid var(--border)' }} />Left on table</span>
+              <span className="flex items-center gap-1"><span style={{ display: 'inline-block', width: 10, height: 2, background: 'var(--warning)' }} />% captured</span>
+            </div>
+            <ResponsiveContainer width="100%" height={150}>
+              <ComposedChart data={mandatoryChartData} margin={{ top: 4, right: 24, bottom: 0, left: -10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                <XAxis dataKey="period" tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="left" tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} width={40} />
+                <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={32} />
+                <Tooltip contentStyle={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: '8px', fontFamily: 'JetBrains Mono', fontSize: '11px' }} labelStyle={{ color: 'var(--text-muted)', marginBottom: 4 }}
+                  formatter={(v, name) => name === 'pct' ? [`${v}%`, 'Captured'] : name === 'earned' ? [fmt(v), 'Earned'] : [fmt(v), 'Left on table']} />
+                <Bar yAxisId="left" dataKey="earned" stackId="a" fill="#6ee7b7" radius={[0, 0, 3, 3]} />
+                <Bar yAxisId="left" dataKey="uncaptured" stackId="a" fill="var(--bg-raised)" stroke="var(--border)" strokeWidth={1} radius={[3, 3, 0, 0]} />
+                <Line yAxisId="right" type="monotone" dataKey="pct" stroke="var(--warning)" strokeWidth={2} dot={{ fill: 'var(--warning)', r: 3, strokeWidth: 0 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Bonus chore performance */}
+        {bonusChartData.length > 0 && (
+          <div className="p-4 rounded-xl flex flex-col gap-3"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <div>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>BONUS CHORE PERFORMANCE</p>
+              <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>Extra money you earned — and money left on the table</p>
+            </div>
+            <div className="flex items-center gap-4 text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
+              <span className="flex items-center gap-1"><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: '#6ee7b7' }} />Earned</span>
+              <span className="flex items-center gap-1"><span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: 'var(--bg-raised)', border: '1px solid var(--border)' }} />Left on table</span>
+              <span className="flex items-center gap-1"><span style={{ display: 'inline-block', width: 10, height: 2, background: 'var(--warning)' }} />% captured</span>
+            </div>
+            <ResponsiveContainer width="100%" height={150}>
+              <ComposedChart data={bonusChartData} margin={{ top: 4, right: 24, bottom: 0, left: -10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                <XAxis dataKey="period" tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} />
+                <YAxis yAxisId="left" tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} width={40} />
+                <YAxis yAxisId="right" orientation="right" domain={[0, 100]} tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} tickFormatter={v => `${v}%`} width={32} />
+                <Tooltip contentStyle={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: '8px', fontFamily: 'JetBrains Mono', fontSize: '11px' }} labelStyle={{ color: 'var(--text-muted)', marginBottom: 4 }}
+                  formatter={(v, name) => name === 'pct' ? [`${v}%`, 'Capture rate'] : name === 'earned' ? [fmt(v), 'Earned'] : [fmt(v), 'Left on table']} />
+                <Bar yAxisId="left" dataKey="earned" stackId="a" fill="#6ee7b7" radius={[0, 0, 3, 3]} />
+                <Bar yAxisId="left" dataKey="uncaptured" stackId="a" fill="var(--bg-raised)" stroke="var(--border)" strokeWidth={1} radius={[3, 3, 0, 0]} />
+                <Line yAxisId="right" type="monotone" dataKey="pct" stroke="var(--warning)" strokeWidth={2} dot={{ fill: 'var(--warning)', r: 3, strokeWidth: 0 }} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Income allocation */}
+        {allocationChartData.length > 0 && (
+          <div className="p-4 rounded-xl flex flex-col gap-3"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <div>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>INCOME ALLOCATION</p>
+              <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>Where each payslip went — tax &amp; rent come first</p>
+            </div>
+            <div className="flex items-center gap-3 flex-wrap text-xs font-mono" style={{ color: 'var(--text-dim)' }}>
+              {[{ color: '#f87171', label: 'Tax & rent' }, { color: '#60a5fa', label: 'Savings' }, { color: '#4ade80', label: 'Wallet' }, { color: '#D4A017', label: 'Philanthropy' }].map(({ color, label }) => (
+                <span key={label} className="flex items-center gap-1">
+                  <span style={{ display: 'inline-block', width: 10, height: 10, borderRadius: 2, background: color }} />{label}
+                </span>
+              ))}
+            </div>
+            <ResponsiveContainer width="100%" height={150}>
+              <ComposedChart data={allocationChartData} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
+                <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
+                <XAxis dataKey="period" tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} />
+                <YAxis tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} width={40} />
+                <Tooltip contentStyle={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: '8px', fontFamily: 'JetBrains Mono', fontSize: '11px' }} labelStyle={{ color: 'var(--text-muted)', marginBottom: 4 }}
+                  formatter={(v, name) => [fmt(v), { obligations: 'Tax & rent', savings: 'Savings', wallet: 'Wallet', philanthropy: 'Philanthropy' }[name] ?? name]} />
+                <Bar dataKey="obligations" stackId="s" fill="#f87171" radius={[0, 0, 3, 3]} />
+                <Bar dataKey="savings"     stackId="s" fill="#60a5fa" />
+                <Bar dataKey="philanthropy" stackId="s" fill="#D4A017" />
+                <Bar dataKey="wallet"      stackId="s" fill="#4ade80" radius={[3, 3, 0, 0]} />
+              </ComposedChart>
+            </ResponsiveContainer>
+          </div>
+        )}
+
+        {/* Top rewards spent */}
+        {allTxns.length > 0 && (
+          <div className="p-4 rounded-xl flex flex-col gap-3"
+            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+            <div>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>TOP REWARDS SPENT ON</p>
+              <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>Your biggest spending habits — is it worth it?</p>
+            </div>
+            <TopRewardsChart transactions={allTxns} fmt={fmt} />
           </div>
         )}
 

@@ -39,6 +39,7 @@ import Savings    from './views/child-tier2/Savings'
 import GoalJar    from './views/child-tier2/GoalJar'
 import FamilyFund from './views/child-tier2/FamilyFund'
 import Rewards    from './views/child-tier2/Rewards'
+import Wallet     from './views/child-tier2/Wallet'
 import History    from './views/child-tier2/History'
 
 
@@ -282,6 +283,7 @@ export default function App() {
               <Route path="goal"        element={<GoalJar />} />
               <Route path="family-fund" element={<FamilyFund />} />
               <Route path="rewards" element={<Rewards />} />
+              <Route path="wallet"  element={<Wallet />} />
               <Route path="history" element={<Navigate to="/child/ledger" replace />} />
             </Route>
 

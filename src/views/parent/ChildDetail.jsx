@@ -1,12 +1,14 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useFamily, useCurrency, usePeriod } from '../../context/FamilyContext'
-import { getPayslips, getTransactionsForPeriod, getTransactions, parentDonate, parentSubGoalWithdrawal, parentDepositToSavings, parentDepositToSubGoal, transferSavingsToWallet, parentWalletWithdrawal } from '../../db/operations'
+import { getPayslips, getTransactionsForPeriod, getTransactions, parentDonate, parentSubGoalWithdrawal, parentDepositToSavings, parentDepositToSubGoal, transferSavingsToWallet, parentWalletWithdrawal, parentBuyReward } from '../../db/operations'
 import { settlePayslip } from '../../engine/payslip'
 import PayslipCard from '../../components/PayslipCard'
 import { displayDate, today } from '../../utils/dates'
-import { ChevronLeft, ChevronDown, ChevronUp, ChevronRight, Heart, Target, ArrowDownToLine, ArrowUpFromLine, Banknote, PiggyBank, X } from 'lucide-react'
+import { ChevronLeft, ChevronDown, ChevronUp, ChevronRight, Heart, Target, ArrowDownToLine, ArrowUpFromLine, Banknote, PiggyBank, X, ShoppingBag } from 'lucide-react'
 import NetWorthChart from '../../components/NetWorthChart'
+import SavingsGrowthChart from '../../components/SavingsGrowthChart'
+import TopRewardsChart from '../../components/TopRewardsChart'
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { CreditScoreLineChart } from '../child-tier2/Home'
 
@@ -85,7 +87,7 @@ function PeriodTxs({ memberId, periodStart, periodEnd }) {
 export default function ChildDetail() {
   const { memberId }  = useParams()
   const navigate      = useNavigate()
-  const { children, reload } = useFamily()
+  const { children, reload, rewards, family } = useFamily()
   const fmt           = useCurrency()
   const { periodStart, periodEnd, label: periodLabel } = usePeriod()
 
@@ -289,6 +291,27 @@ export default function ChildDetail() {
     saved:  p.allocations?.savings ?? 0,
   }))
 
+  // Savings growth actuals + projection (mirrors child Home)
+  const savingsActual = settledSorted.map(p => {
+    const b = p.balancesAfter ?? {}
+    const d = new Date(p.periodEnd + 'T12:00:00')
+    const label = d.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' }).toUpperCase().replace(' ', '-')
+    const goalsTotal = (b.subGoals ?? []).reduce((s, g) => s + (g.balance ?? 0), 0)
+    return { label, value: (b.savings ?? 0) + goalsTotal }
+  })
+  const savingsProjected = (() => {
+    const rate = (child?.config?.interestRate ?? family?.config?.interestRate) ?? 0.02
+    const periodicSavings = savingsChartData.length > 0
+      ? savingsChartData[savingsChartData.length - 1].saved
+      : 0
+    const totalSav = (accounts.savings ?? 0) + (subGoals ?? []).reduce((s, g) => s + (g.balance ?? 0), 0)
+    let balance = totalSav
+    return Array.from({ length: 8 }, (_, i) => {
+      balance = (balance * (1 + rate)) + periodicSavings
+      return { label: `+${i + 1}`, value: Math.round(balance) }
+    })
+  })()
+
   // How each payslip gross was split across buckets
   const allocationChartData = settledSorted.map(p => ({
     period:      periodId(p.periodEnd),
@@ -378,6 +401,7 @@ export default function ChildDetail() {
               { id: 'savingsToWallet',  label: 'Savings → Wallet',  icon: <ArrowUpFromLine size={13} />,  color: 'var(--positive)',     disabled: (accounts.savings  ?? 0) <= 0 },
               { id: 'walletWithdraw',   label: 'Cash / Bank Out',   icon: <Banknote size={13} />,         color: 'var(--warning)',      disabled: (accounts.spending ?? 0) <= 0 },
               { id: 'donate',           label: 'Donate',            icon: <Heart size={13} />,            color: '#D4A017',             disabled: (accounts.philanthropy ?? 0) <= 0 },
+              { id: 'buyReward',        label: 'Buy Reward',        icon: <ShoppingBag size={13} />,      color: '#c084fc',             disabled: (accounts.spending ?? 0) <= 0 },
             ].map(({ id, label, icon, color, disabled }) => (
               <button key={id}
                 onClick={() => openSheet(id)}
@@ -521,27 +545,24 @@ export default function ChildDetail() {
               </div>
             )}
 
-            {/* Savings per period */}
-            {savingsChartData.length > 0 && (
+            {/* Savings growth + projection */}
+            {savingsActual.length > 0 && (
+              <div className="p-4 rounded-xl flex flex-col gap-2"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+                <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SAVINGS GROWTH</p>
+                <SavingsGrowthChart actualData={savingsActual} projected={savingsProjected} />
+              </div>
+            )}
+
+            {/* Top rewards spent */}
+            {allTxs.length > 0 && (
               <div className="p-4 rounded-xl flex flex-col gap-3"
                 style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
                 <div>
-                  <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SAVINGS PER PERIOD</p>
-                  <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>Auto-saved each payslip — higher chore completion = bigger bar</p>
+                  <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>TOP REWARDS SPENT ON</p>
+                  <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-dim)' }}>Biggest spending habits — conversation starter</p>
                 </div>
-                <ResponsiveContainer width="100%" height={120}>
-                  <ComposedChart data={savingsChartData} margin={{ top: 4, right: 8, bottom: 0, left: -10 }}>
-                    <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-                    <XAxis dataKey="period" tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} />
-                    <YAxis tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} width={40} />
-                    <Tooltip
-                      contentStyle={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: '8px', fontFamily: 'JetBrains Mono', fontSize: '11px' }}
-                      labelStyle={{ color: 'var(--text-muted)', marginBottom: 4 }}
-                      formatter={v => [fmt(v), 'Saved']}
-                    />
-                    <Bar dataKey="saved" fill="#60a5fa" radius={[4, 4, 0, 0]} />
-                  </ComposedChart>
-                </ResponsiveContainer>
+                <TopRewardsChart transactions={allTxs} fmt={fmt} />
               </div>
             )}
 
@@ -850,6 +871,52 @@ export default function ChildDetail() {
               <div className="flex gap-2">
                 <button onClick={closeSheet} className="flex-1 py-2.5 rounded-xl text-sm font-mono" style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>Cancel</button>
                 <button onClick={handleDonate} disabled={busy} className="flex-1 py-2.5 rounded-xl text-sm font-mono font-semibold active:scale-95" style={{ background: 'rgba(74,222,128,0.15)', color: 'var(--positive)', border: '1px solid rgba(74,222,128,0.3)' }}>{busy ? 'Processing...' : 'Confirm Donation'}</button>
+              </div>
+            </>}
+
+            {/* Buy Reward for child */}
+            {activeSheet === 'buyReward' && <>
+              <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>🛍 Buy Reward for {child.name}</p>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Wallet: {fmt(accounts.spending ?? 0)}</p>
+              <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
+                {rewards.filter(r => r.isActive).map(r => {
+                  const canAfford = (accounts.spending ?? 0) >= r.price
+                  const selected  = sheetNote === r.id
+                  return (
+                    <button key={r.id} onClick={() => { setSheetNote(r.id); setSheetAmount(String(r.price)) }}
+                      className="flex items-center gap-3 px-3 py-2 rounded-xl transition-all"
+                      style={{
+                        background: selected ? 'rgba(192,132,252,0.1)' : 'var(--bg-raised)',
+                        border: `1px solid ${selected ? 'rgba(192,132,252,0.4)' : 'var(--border)'}`,
+                        opacity: canAfford ? 1 : 0.4,
+                      }}>
+                      <span className="text-xl">{r.emoji}</span>
+                      <span className="text-xs font-mono flex-1 text-left" style={{ color: 'var(--text-primary)' }}>{r.title}</span>
+                      <span className="text-xs font-mono font-semibold" style={{ color: '#c084fc' }}>{fmt(r.price)}</span>
+                    </button>
+                  )
+                })}
+              </div>
+              {actionError && <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{actionError}</p>}
+              <div className="flex gap-2">
+                <button onClick={closeSheet} className="flex-1 py-2.5 rounded-xl text-sm font-mono" style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>Cancel</button>
+                <button
+                  disabled={!sheetNote || busy}
+                  onClick={async () => {
+                    if (!sheetNote) return
+                    const reward = rewards.find(r => r.id === sheetNote)
+                    if (!reward) return
+                    setBusy(true); setActionError(null)
+                    try {
+                      await parentBuyReward(child.id, reward.id, reward.title, reward.price)
+                      await reload(); closeSheet()
+                    } catch (e) { setActionError(e.message) }
+                    finally { setBusy(false) }
+                  }}
+                  className="flex-1 py-2.5 rounded-xl text-sm font-mono font-semibold active:scale-95"
+                  style={{ background: 'rgba(192,132,252,0.15)', color: '#c084fc', border: '1px solid rgba(192,132,252,0.3)', opacity: !sheetNote || busy ? 0.5 : 1 }}>
+                  {busy ? 'Processing...' : 'Buy Now'}
+                </button>
               </div>
             </>}
 

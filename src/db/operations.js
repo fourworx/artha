@@ -562,6 +562,26 @@ export async function approveRewardRequest(requestId, memberId, amount) {
   })
 }
 
+// Parent buys a reward directly on behalf of a child (no request flow)
+export async function parentBuyReward(memberId, rewardId, rewardTitle, amount) {
+  const member = await getMember(memberId)
+  if (!member) throw new Error('Member not found')
+  if ((member.accounts.spending ?? 0) < amount) throw new Error('Insufficient wallet balance')
+  await updateMemberAccounts(memberId, {
+    ...member.accounts,
+    spending: member.accounts.spending - amount,
+  })
+  await addTransaction({
+    id: crypto.randomUUID(),
+    memberId,
+    type: 'reward',
+    amount: -amount,
+    description: `Reward: ${rewardTitle}`,
+    date: new Date().toISOString().slice(0, 10),
+    relatedId: rewardId,
+  })
+}
+
 // ── Payslips ─────────────────────────────────────────────────────────────────
 
 export async function getPayslips(memberId) {
