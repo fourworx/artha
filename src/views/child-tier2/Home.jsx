@@ -12,7 +12,6 @@ import { ChevronRight, X, Landmark } from 'lucide-react'
 import CreditScorePopup from '../../components/CreditScorePopup'
 import NetWorthChart from '../../components/NetWorthChart'
 import SavingsGrowthChart from '../../components/SavingsGrowthChart'
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid, ReferenceLine } from 'recharts'
 
 // ── Sparkline ─────────────────────────────────────────────────────────────────
 function Sparkline({ data, color }) {
@@ -61,42 +60,115 @@ function Sparkline({ data, color }) {
 }
 
 // ── Credit score line chart (shared by child Home + parent ChildDetail) ───────
+// SVG-based, same style as NetWorthChart but with band-coloured segments + dots.
 export function CreditScoreLineChart({ data }) {
-  const scoreColor = (s) => s >= 700 ? 'var(--positive)' : s >= 500 ? 'var(--warning)' : 'var(--negative)'
+  if (!data || data.length < 2) {
+    return (
+      <div className="flex items-center justify-center py-6">
+        <p style={{ color: 'var(--text-dim)', fontSize: 10, fontFamily: 'monospace' }}>
+          Not enough data yet
+        </p>
+      </div>
+    )
+  }
+
+  const bandColor  = (s) => s >= 700 ? '#4ade80' : s >= 500 ? '#D4A017' : '#f87171'
+  const bandLabel  = (s) => s >= 700 ? '≥700'    : s >= 500 ? '≥500'    : '<500'
+
+  const W = 300, H = 90, PAD_L = 4, PAD_R = 4, PAD_T = 8, PAD_B = 20
+  const inner_w = W - PAD_L - PAD_R
+  const inner_h = H - PAD_T - PAD_B
+
+  // Fixed domain 300–850 so the bands are spatially meaningful
+  const MIN_SCORE = 300, MAX_SCORE = 850
+  const toX = i => PAD_L + (i / (data.length - 1)) * inner_w
+  const toY = v => PAD_T + inner_h - ((v - MIN_SCORE) / (MAX_SCORE - MIN_SCORE)) * inner_h
+
+  const points = data.map((d, i) => ({ x: toX(i), y: toY(d.score), ...d }))
+  const first  = points[0]
+  const last   = points[points.length - 1]
+  const currentColor = bandColor(last.score)
+
+  // Area fill path (uses the full polyline)
+  const areaD = [
+    `M ${first.x.toFixed(1)} ${(H - PAD_B).toFixed(1)}`,
+    ...points.map(p => `L ${p.x.toFixed(1)} ${p.y.toFixed(1)}`),
+    `L ${last.x.toFixed(1)} ${(H - PAD_B).toFixed(1)}`,
+    'Z',
+  ].join(' ')
+
+  // Reference line Y positions
+  const y700 = toY(700)
+  const y500 = toY(500)
+
+  const gradId = 'cs-area'
+
   return (
-    <ResponsiveContainer width="100%" height={130}>
-      <LineChart data={data} margin={{ top: 8, right: 8, bottom: 0, left: -18 }}>
+    <div style={{ width: '100%' }}>
+      {/* Key + current score pill */}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {[['#4ade80', '≥700'], ['#D4A017', '≥500'], ['#f87171', '<500']].map(([c, lbl]) => (
+            <span key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'JetBrains Mono', fontSize: 9, color: 'var(--text-dim)' }}>
+              <span style={{ display: 'inline-block', width: 16, height: 2, background: c, borderRadius: 1 }} />
+              {lbl}
+            </span>
+          ))}
+        </div>
+        <span style={{
+          fontFamily: 'JetBrains Mono', fontSize: 11, fontWeight: 700,
+          color: currentColor,
+          background: `${currentColor}18`,
+          border: `1px solid ${currentColor}44`,
+          borderRadius: 999, padding: '2px 8px',
+        }}>
+          {last.score}
+        </span>
+      </div>
+
+      <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: H, display: 'block' }}>
         <defs>
-          <linearGradient id="creditGrad" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%"   stopColor="#a855f7" />
-            <stop offset="50%"  stopColor="#60a5fa" />
-            <stop offset="100%" stopColor="#34d399" />
+          <linearGradient id={gradId} x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor={currentColor} stopOpacity="0.18" />
+            <stop offset="100%" stopColor={currentColor} stopOpacity="0" />
           </linearGradient>
         </defs>
-        <CartesianGrid strokeDasharray="3 3" stroke="rgba(255,255,255,0.04)" vertical={false} />
-        <XAxis dataKey="label" tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} />
-        <YAxis domain={[300, 850]} tick={{ fontFamily: 'JetBrains Mono', fontSize: 9, fill: 'var(--text-dim)' }} axisLine={false} tickLine={false} width={36} />
-        <Tooltip
-          contentStyle={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', borderRadius: 8, fontFamily: 'JetBrains Mono', fontSize: 11 }}
-          labelStyle={{ color: 'var(--text-muted)' }}
-          itemStyle={{ color: 'var(--text-primary)' }}
-          formatter={(v) => [v, 'Credit Score']}
-        />
-        <ReferenceLine y={700} stroke="rgba(74,222,128,0.2)"  strokeDasharray="4 4" />
-        <ReferenceLine y={500} stroke="rgba(251,191,36,0.2)" strokeDasharray="4 4" />
-        <Line
-          type="monotone"
-          dataKey="score"
-          stroke="url(#creditGrad)"
-          strokeWidth={2.5}
-          dot={(props) => {
-            const s = props.payload.score
-            return <circle key={props.key} cx={props.cx} cy={props.cy} r={4} fill={scoreColor(s)} stroke="var(--bg-surface)" strokeWidth={1.5} />
-          }}
-          activeDot={{ r: 5, strokeWidth: 0 }}
-        />
-      </LineChart>
-    </ResponsiveContainer>
+
+        {/* Area fill */}
+        <path d={areaD} fill={`url(#${gradId})`} />
+
+        {/* Reference lines at 700 and 500 */}
+        <line x1={PAD_L} y1={y700} x2={W - PAD_R} y2={y700}
+          stroke="#4ade80" strokeWidth="0.5" strokeOpacity="0.3" strokeDasharray="4,4" />
+        <line x1={PAD_L} y1={y500} x2={W - PAD_R} y2={y500}
+          stroke="#D4A017" strokeWidth="0.5" strokeOpacity="0.3" strokeDasharray="4,4" />
+
+        {/* Line segments coloured by the destination point's band */}
+        {points.slice(1).map((p, i) => (
+          <line key={i}
+            x1={points[i].x.toFixed(1)} y1={points[i].y.toFixed(1)}
+            x2={p.x.toFixed(1)}         y2={p.y.toFixed(1)}
+            stroke={bandColor(p.score)} strokeWidth="1.5"
+            strokeLinecap="round" strokeLinejoin="round"
+          />
+        ))}
+
+        {/* Dots */}
+        {points.map((p, i) => (
+          <circle key={i} cx={p.x} cy={p.y}
+            r={i === points.length - 1 ? 3 : 2}
+            fill={bandColor(p.score)}
+            stroke="var(--bg-surface)" strokeWidth="1.2"
+          />
+        ))}
+
+        {/* X-axis labels: first and last only */}
+        <text x={first.x} y={H} textAnchor="middle"
+          fontSize="7" fontFamily="monospace" fill="var(--text-dim)">{first.label}</text>
+        <text x={last.x} y={H} textAnchor="middle"
+          fontSize="7" fontFamily="monospace" fill="var(--text-dim)">{last.label}</text>
+      </svg>
+    </div>
   )
 }
 
