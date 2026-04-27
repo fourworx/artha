@@ -105,25 +105,13 @@ export function CreditScoreLineChart({ data }) {
 
   return (
     <div style={{ width: '100%' }}>
-      {/* Key + current score pill */}
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 6 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {[['#4ade80', '≥700'], ['#D4A017', '≥500'], ['#f87171', '<500']].map(([c, lbl]) => (
-            <span key={lbl} style={{ display: 'flex', alignItems: 'center', gap: 4, fontFamily: 'JetBrains Mono', fontSize: 9, color: 'var(--text-dim)' }}>
-              <span style={{ display: 'inline-block', width: 16, height: 2, background: c, borderRadius: 1 }} />
-              {lbl}
-            </span>
-          ))}
-        </div>
-        <span style={{
-          fontFamily: 'JetBrains Mono', fontSize: 11, fontWeight: 700,
-          color: currentColor,
-          background: `${currentColor}18`,
-          border: `1px solid ${currentColor}44`,
-          borderRadius: 999, padding: '2px 8px',
-        }}>
-          {last.score}
-        </span>
+      {/* Key: colour-coded numbers only */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 6 }}>
+        {[['#4ade80', '≥700'], ['#D4A017', '≥500'], ['#f87171', '<500']].map(([c, lbl]) => (
+          <span key={lbl} style={{ fontFamily: 'JetBrains Mono', fontSize: 9, fontWeight: 600, color: c }}>
+            {lbl}
+          </span>
+        ))}
       </div>
 
       <svg viewBox={`0 0 ${W} ${H}`} style={{ width: '100%', height: H, display: 'block' }}>
