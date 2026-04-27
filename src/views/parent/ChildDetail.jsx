@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react'
 import { useParams, useNavigate } from 'react-router-dom'
 import { useFamily, useCurrency, usePeriod } from '../../context/FamilyContext'
-import { getPayslips, getTransactionsForPeriod, getTransactions, parentDonate, parentSubGoalWithdrawal } from '../../db/operations'
+import { getPayslips, getTransactionsForPeriod, getTransactions, parentDonate, parentSubGoalWithdrawal, parentDepositToSavings, parentDepositToSubGoal, transferSavingsToWallet, parentWalletWithdrawal } from '../../db/operations'
 import { settlePayslip } from '../../engine/payslip'
 import PayslipCard from '../../components/PayslipCard'
 import { displayDate, today } from '../../utils/dates'
-import { ChevronLeft, ChevronDown, ChevronUp, Heart, Target } from 'lucide-react'
+import { ChevronLeft, ChevronDown, ChevronUp, Heart, Target, ArrowDownToLine, ArrowUpFromLine, Banknote, PiggyBank } from 'lucide-react'
 import NetWorthChart from '../../components/NetWorthChart'
 import SpendingBreakdown from '../../components/SpendingBreakdown'
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
@@ -100,19 +100,40 @@ export default function ChildDetail() {
   const [settleError,   setSettleError]   = useState(null)
   const [allTxs,        setAllTxs]        = useState([])
 
-  // Parent-direct philanthropy actions
-  const [donateSheet,   setDonateSheet]   = useState(false)   // open/close
-  const [donateCharity, setDonateCharity] = useState('')
-  const [donateAmount,  setDonateAmount]  = useState('')
-  const [donating,      setDonating]      = useState(false)
+  // Parent-direct money actions
+  const [activeSheet,   setActiveSheet]   = useState(null) // 'donate'|'savingsToWallet'|'walletToSavings'|'walletWithdraw'|'subGoalDeposit'|'subGoalWithdraw'
+  const [sheetAmount,   setSheetAmount]   = useState('')
+  const [sheetNote,     setSheetNote]     = useState('')   // charity name or withdrawal dest
+  const [sheetSubGoal,  setSheetSubGoal]  = useState(null) // subGoal object for goal sheets
+  const [sheetDest,     setSheetDest]     = useState('spending')
+  const [sheetDestGoal, setSheetDestGoal] = useState('')
+  const [sheetDelete,   setSheetDelete]   = useState(false)
+  const [busy,          setBusy]          = useState(false)
+  const [actionError,   setActionError]   = useState(null)
 
-  const [withdrawSheet,    setWithdrawSheet]    = useState(null)  // subGoal object or null
-  const [withdrawAmount,   setWithdrawAmount]   = useState('')
-  const [withdrawDest,     setWithdrawDest]     = useState('spending')
-  const [withdrawDestGoal, setWithdrawDestGoal] = useState('')
-  const [withdrawDelete,   setWithdrawDelete]   = useState(false)
-  const [withdrawing,      setWithdrawing]      = useState(false)
-  const [actionError,      setActionError]      = useState(null)
+  // Legacy aliases so existing handlers still work
+  const donateSheet    = activeSheet === 'donate'
+  const donateCharity  = sheetNote
+  const donateAmount   = sheetAmount
+  const withdrawSheet  = activeSheet === 'subGoalWithdraw' ? sheetSubGoal : null
+  const withdrawAmount = sheetAmount
+  const withdrawDest   = sheetDest
+  const withdrawDestGoal = sheetDestGoal
+  const withdrawDelete = sheetDelete
+  const donating    = busy
+  const withdrawing = busy
+
+  const openSheet = (name, extra = {}) => {
+    setActiveSheet(name)
+    setSheetAmount('')
+    setSheetNote(extra.note ?? '')
+    setSheetSubGoal(extra.subGoal ?? null)
+    setSheetDest('spending')
+    setSheetDestGoal('')
+    setSheetDelete(false)
+    setActionError(null)
+  }
+  const closeSheet = () => { setActiveSheet(null); setActionError(null) }
 
   useEffect(() => {
     if (!memberId) return
@@ -152,48 +173,76 @@ export default function ChildDetail() {
   }
 
   const handleDonate = async () => {
-    const amt = parseFloat(donateAmount)
-    if (!donateCharity.trim() || !amt || amt <= 0) return
-    setDonating(true)
-    setActionError(null)
+    const amt = parseFloat(sheetAmount)
+    if (!sheetNote.trim() || !amt || amt <= 0) return
+    setBusy(true); setActionError(null)
     try {
-      await parentDonate(memberId, amt, donateCharity.trim())
-      await reload()
-      setDonateSheet(false)
-      setDonateCharity('')
-      setDonateAmount('')
-    } catch (e) {
-      setActionError(e.message)
-    } finally {
-      setDonating(false)
-    }
+      await parentDonate(memberId, amt, sheetNote.trim())
+      await reload(); closeSheet()
+    } catch (e) { setActionError(e.message) }
+    finally { setBusy(false) }
+  }
+
+  const handleSavingsToWallet = async () => {
+    const amt = parseFloat(sheetAmount)
+    if (!amt || amt <= 0) return
+    setBusy(true); setActionError(null)
+    try {
+      await transferSavingsToWallet(memberId, amt)
+      await reload(); closeSheet()
+    } catch (e) { setActionError(e.message) }
+    finally { setBusy(false) }
+  }
+
+  const handleWalletToSavings = async () => {
+    const amt = parseFloat(sheetAmount)
+    if (!amt || amt <= 0) return
+    setBusy(true); setActionError(null)
+    try {
+      await parentDepositToSavings(memberId, amt)
+      await reload(); closeSheet()
+    } catch (e) { setActionError(e.message) }
+    finally { setBusy(false) }
+  }
+
+  const handleWalletWithdraw = async () => {
+    const amt = parseFloat(sheetAmount)
+    if (!amt || amt <= 0) return
+    setBusy(true); setActionError(null)
+    try {
+      await parentWalletWithdrawal(memberId, amt, sheetDest)
+      await reload(); closeSheet()
+    } catch (e) { setActionError(e.message) }
+    finally { setBusy(false) }
+  }
+
+  const handleSubGoalDeposit = async () => {
+    const amt = parseFloat(sheetAmount)
+    if (!sheetSubGoal || !amt || amt <= 0) return
+    setBusy(true); setActionError(null)
+    try {
+      await parentDepositToSubGoal(memberId, sheetSubGoal.id, amt)
+      await reload(); closeSheet()
+    } catch (e) { setActionError(e.message) }
+    finally { setBusy(false) }
   }
 
   const handleWithdraw = async () => {
-    const amt = parseFloat(withdrawAmount)
-    if (!withdrawSheet || !amt || amt <= 0) return
-    setWithdrawing(true)
-    setActionError(null)
+    const amt = parseFloat(sheetAmount)
+    if (!sheetSubGoal || !amt || amt <= 0) return
+    setBusy(true); setActionError(null)
     try {
       const meta = {
-        subGoalId: withdrawSheet.id,
-        subGoalName: withdrawSheet.name,
-        destination: withdrawDest,
-        ...(withdrawDest === 'subgoal' && withdrawDestGoal ? { destinationSubGoalId: withdrawDestGoal } : {}),
-        deleteGoal: withdrawDelete,
+        subGoalId:   sheetSubGoal.id,
+        subGoalName: sheetSubGoal.name,
+        destination: sheetDest,
+        ...(sheetDest === 'subgoal' && sheetDestGoal ? { destinationSubGoalId: sheetDestGoal } : {}),
+        deleteGoal:  sheetDelete,
       }
       await parentSubGoalWithdrawal(memberId, amt, meta)
-      await reload()
-      setWithdrawSheet(null)
-      setWithdrawAmount('')
-      setWithdrawDest('spending')
-      setWithdrawDestGoal('')
-      setWithdrawDelete(false)
-    } catch (e) {
-      setActionError(e.message)
-    } finally {
-      setWithdrawing(false)
-    }
+      await reload(); closeSheet()
+    } catch (e) { setActionError(e.message) }
+    finally { setBusy(false) }
   }
 
   if (!child) {
@@ -264,12 +313,10 @@ export default function ChildDetail() {
               <h2 className="text-base font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
                 {child.name}
               </h2>
-              {child.tier >= 2 && (
-                <span className="text-xs font-mono px-1.5 py-0.5 rounded-full"
-                  style={{ background: scoreBg, color: scoreColor, border: `1px solid ${scoreBg}` }}>
-                  ★ {score}
-                </span>
-              )}
+              <span className="text-xs font-mono px-1.5 py-0.5 rounded-full"
+                style={{ background: scoreBg, color: scoreColor, border: `1px solid ${scoreBg}` }}>
+                ★ {score}
+              </span>
             </div>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
               Tier {child.tier} · {fmt(child.baseSalary)}/{periodLabel}
@@ -280,40 +327,42 @@ export default function ChildDetail() {
 
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
 
-        {/* Balance tiles */}
-        {child.tier >= 2 && (
-          <div className="grid grid-cols-3 gap-2">
+        {/* Balance tiles — always shown */}
+        <div className="grid grid-cols-3 gap-2">
+          {[
+            { label: 'SPENDING',     value: accounts.spending     ?? 0, color: 'var(--positive)' },
+            { label: 'SAVINGS',      value: accounts.savings      ?? 0, color: 'var(--accent-blue)' },
+            { label: 'PHILANTHROPY', value: accounts.philanthropy ?? 0, color: '#D4A017' },
+          ].map(({ label, value, color }) => (
+            <div key={label} className="p-3 rounded-xl text-center"
+              style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)', fontSize: '9px' }}>{label}</p>
+              <p className="text-sm font-mono font-semibold mt-1" style={{ color }}>{fmt(value)}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* Manage Money — parent action buttons */}
+        <div className="flex flex-col gap-2">
+          <p className="text-xs font-mono px-1" style={{ color: 'var(--text-muted)' }}>MANAGE MONEY</p>
+          <div className="grid grid-cols-2 gap-2">
             {[
-              { label: 'SPENDING',     value: accounts.spending     ?? 0, color: 'var(--positive)' },
-              { label: 'SAVINGS',      value: accounts.savings      ?? 0, color: 'var(--accent-blue)' },
-              { label: 'PHILANTHROPY', value: accounts.philanthropy ?? 0, color: '#D4A017' },
-            ].map(({ label, value, color }) => (
-              <div key={label} className="p-3 rounded-xl text-center"
-                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
-                <p className="text-xs font-mono" style={{ color: 'var(--text-muted)', fontSize: '9px' }}>{label}</p>
-                <p className="text-sm font-mono font-semibold mt-1" style={{ color }}>{fmt(value)}</p>
-              </div>
+              { id: 'walletToSavings',  label: 'Wallet → Savings',  icon: <PiggyBank size={13} />,       color: 'var(--accent-blue)',  disabled: (accounts.spending ?? 0) <= 0 },
+              { id: 'savingsToWallet',  label: 'Savings → Wallet',  icon: <ArrowUpFromLine size={13} />,  color: 'var(--positive)',     disabled: (accounts.savings  ?? 0) <= 0 },
+              { id: 'walletWithdraw',   label: 'Cash / Bank Out',   icon: <Banknote size={13} />,         color: 'var(--warning)',      disabled: (accounts.spending ?? 0) <= 0 },
+              { id: 'donate',           label: 'Donate',            icon: <Heart size={13} />,            color: '#D4A017',             disabled: (accounts.philanthropy ?? 0) <= 0 },
+            ].map(({ id, label, icon, color, disabled }) => (
+              <button key={id}
+                onClick={() => openSheet(id)}
+                disabled={disabled}
+                className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-left transition-all active:scale-95"
+                style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', opacity: disabled ? 0.4 : 1 }}>
+                <span style={{ color }}>{icon}</span>
+                <span className="text-xs font-mono" style={{ color: 'var(--text-primary)' }}>{label}</span>
+              </button>
             ))}
           </div>
-        )}
-
-        {/* Philanthropy: donate button */}
-        {child.tier >= 2 && (accounts.philanthropy ?? 0) > 0 && (
-          <div className="flex items-center justify-between px-3 py-2 rounded-xl"
-            style={{ background: 'rgba(212,160,23,0.06)', border: '1px solid rgba(212,160,23,0.2)' }}>
-            <div className="flex items-center gap-2">
-              <Heart size={14} style={{ color: '#D4A017' }} />
-              <span className="text-xs font-mono" style={{ color: '#D4A017' }}>
-                Philanthropy: {fmt(accounts.philanthropy)}
-              </span>
-            </div>
-            <button onClick={() => { setDonateSheet(true); setActionError(null) }}
-              className="text-xs font-mono px-2 py-1 rounded-lg active:scale-95"
-              style={{ background: 'rgba(212,160,23,0.15)', color: '#D4A017', border: '1px solid rgba(212,160,23,0.3)' }}>
-              Donate
-            </button>
-          </div>
-        )}
+        </div>
 
         {/* Sub-goals */}
         {subGoals.length > 0 && (
@@ -331,11 +380,18 @@ export default function ChildDetail() {
                       {fmt(sg.balance)} / {fmt(sg.target)} · {pct}%
                     </p>
                   </div>
-                  <button onClick={() => { setWithdrawSheet(sg); setWithdrawAmount(''); setWithdrawDest('spending'); setWithdrawDelete(false); setActionError(null) }}
-                    className="text-xs font-mono px-2 py-1 rounded-lg active:scale-95"
-                    style={{ background: 'rgba(96,165,250,0.15)', color: 'var(--accent-blue)', border: '1px solid rgba(96,165,250,0.3)' }}>
-                    Withdraw
-                  </button>
+                  <div className="flex gap-1">
+                    <button onClick={() => openSheet('subGoalDeposit', { subGoal: sg })}
+                      className="text-xs font-mono px-2 py-1 rounded-lg active:scale-95"
+                      style={{ background: 'rgba(74,222,128,0.1)', color: 'var(--positive)', border: '1px solid rgba(74,222,128,0.2)' }}>
+                      Deposit
+                    </button>
+                    <button onClick={() => openSheet('subGoalWithdraw', { subGoal: sg })}
+                      className="text-xs font-mono px-2 py-1 rounded-lg active:scale-95"
+                      style={{ background: 'rgba(96,165,250,0.15)', color: 'var(--accent-blue)', border: '1px solid rgba(96,165,250,0.3)' }}>
+                      Withdraw
+                    </button>
+                  </div>
                 </div>
               )
             })}
@@ -579,130 +635,144 @@ export default function ChildDetail() {
         )}
       </div>
 
-      {/* ── Donate Sheet ── */}
-      {donateSheet && (
+      {/* ── Action Sheets ── */}
+      {activeSheet && (
         <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.6)' }}
-          onClick={() => setDonateSheet(false)}>
+          onClick={closeSheet}>
           <div className="w-full rounded-t-2xl p-5 flex flex-col gap-4"
             style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
             onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
-              Donate from Philanthropy
-            </p>
-            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-              Balance: {fmt(accounts.philanthropy ?? 0)}
-            </p>
-            <input
-              className="w-full px-3 py-2 rounded-xl text-sm font-mono"
-              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-              placeholder="Charity / cause name"
-              value={donateCharity}
-              onChange={e => setDonateCharity(e.target.value)}
-            />
-            <input
-              type="number"
-              className="w-full px-3 py-2 rounded-xl text-sm font-mono"
-              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-              placeholder="Amount"
-              value={donateAmount}
-              onChange={e => setDonateAmount(e.target.value)}
-            />
-            {actionError && (
-              <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{actionError}</p>
-            )}
-            <div className="flex gap-2">
-              <button onClick={() => setDonateSheet(false)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-mono"
-                style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
-                Cancel
-              </button>
-              <button onClick={handleDonate} disabled={donating}
-                className="flex-1 py-2.5 rounded-xl text-sm font-mono font-semibold active:scale-95"
-                style={{ background: 'rgba(74,222,128,0.15)', color: 'var(--positive)', border: '1px solid rgba(74,222,128,0.3)' }}>
-                {donating ? 'Processing...' : 'Confirm Donation'}
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
 
-      {/* ── Withdraw Sheet ── */}
-      {withdrawSheet && (
-        <div className="fixed inset-0 z-50 flex items-end" style={{ background: 'rgba(0,0,0,0.6)' }}
-          onClick={() => setWithdrawSheet(null)}>
-          <div className="w-full rounded-t-2xl p-5 flex flex-col gap-4"
-            style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}
-            onClick={e => e.stopPropagation()}>
-            <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
-              Withdraw from "{withdrawSheet.name}"
-            </p>
-            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-              Balance: {fmt(withdrawSheet.balance)}
-            </p>
-            <input
-              type="number"
-              className="w-full px-3 py-2 rounded-xl text-sm font-mono"
-              style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-              placeholder="Amount"
-              value={withdrawAmount}
-              onChange={e => setWithdrawAmount(e.target.value)}
-            />
-            {/* Destination */}
-            <div className="flex flex-col gap-1">
-              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SEND TO</p>
+            {/* Wallet → Savings */}
+            {activeSheet === 'walletToSavings' && <>
+              <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>Wallet → Savings</p>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Wallet: {fmt(accounts.spending ?? 0)}</p>
+              <input type="number" placeholder="Amount"
+                className="w-full px-3 py-2 rounded-xl text-sm font-mono"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                value={sheetAmount} onChange={e => setSheetAmount(e.target.value)} />
+              {actionError && <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{actionError}</p>}
               <div className="flex gap-2">
-                {['spending', 'philanthropy', 'subgoal'].map(dest => (
-                  <button key={dest}
-                    onClick={() => setWithdrawDest(dest)}
-                    className="flex-1 py-2 rounded-xl text-xs font-mono transition-all"
-                    style={{
-                      background: withdrawDest === dest ? 'rgba(96,165,250,0.15)' : 'var(--bg-raised)',
-                      color: withdrawDest === dest ? 'var(--accent-blue)' : 'var(--text-muted)',
-                      border: `1px solid ${withdrawDest === dest ? 'rgba(96,165,250,0.3)' : 'var(--border)'}`,
-                    }}>
-                    {dest === 'subgoal' ? 'Another Goal' : dest.charAt(0).toUpperCase() + dest.slice(1)}
+                <button onClick={closeSheet} className="flex-1 py-2.5 rounded-xl text-sm font-mono" style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>Cancel</button>
+                <button onClick={handleWalletToSavings} disabled={busy} className="flex-1 py-2.5 rounded-xl text-sm font-mono font-semibold active:scale-95" style={{ background: 'rgba(96,165,250,0.15)', color: 'var(--accent-blue)', border: '1px solid rgba(96,165,250,0.3)' }}>{busy ? 'Moving...' : 'Move to Savings'}</button>
+              </div>
+            </>}
+
+            {/* Savings → Wallet */}
+            {activeSheet === 'savingsToWallet' && <>
+              <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>Savings → Wallet</p>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Savings: {fmt(accounts.savings ?? 0)}</p>
+              <input type="number" placeholder="Amount"
+                className="w-full px-3 py-2 rounded-xl text-sm font-mono"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                value={sheetAmount} onChange={e => setSheetAmount(e.target.value)} />
+              {actionError && <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{actionError}</p>}
+              <div className="flex gap-2">
+                <button onClick={closeSheet} className="flex-1 py-2.5 rounded-xl text-sm font-mono" style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>Cancel</button>
+                <button onClick={handleSavingsToWallet} disabled={busy} className="flex-1 py-2.5 rounded-xl text-sm font-mono font-semibold active:scale-95" style={{ background: 'rgba(74,222,128,0.15)', color: 'var(--positive)', border: '1px solid rgba(74,222,128,0.3)' }}>{busy ? 'Moving...' : 'Move to Wallet'}</button>
+              </div>
+            </>}
+
+            {/* Cash / Bank Withdrawal */}
+            {activeSheet === 'walletWithdraw' && <>
+              <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>Wallet Withdrawal</p>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Wallet: {fmt(accounts.spending ?? 0)}</p>
+              <input type="number" placeholder="Amount"
+                className="w-full px-3 py-2 rounded-xl text-sm font-mono"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                value={sheetAmount} onChange={e => setSheetAmount(e.target.value)} />
+              <div className="flex gap-2">
+                {['cash', 'bank'].map(d => (
+                  <button key={d} onClick={() => setSheetDest(d)} className="flex-1 py-2 rounded-xl text-xs font-mono transition-all"
+                    style={{ background: sheetDest === d ? 'rgba(251,191,36,0.15)' : 'var(--bg-raised)', color: sheetDest === d ? 'var(--warning)' : 'var(--text-muted)', border: `1px solid ${sheetDest === d ? 'rgba(251,191,36,0.3)' : 'var(--border)'}` }}>
+                    {d === 'cash' ? 'Physical Cash' : 'Bank Transfer'}
                   </button>
                 ))}
               </div>
-              {withdrawDest === 'subgoal' && subGoals.filter(s => s.id !== withdrawSheet.id).length > 0 && (
-                <select
-                  className="w-full px-3 py-2 rounded-xl text-sm font-mono mt-1"
-                  style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
-                  value={withdrawDestGoal}
-                  onChange={e => setWithdrawDestGoal(e.target.value)}>
-                  <option value="">Select goal…</option>
-                  {subGoals.filter(s => s.id !== withdrawSheet.id).map(s => (
-                    <option key={s.id} value={s.id}>{s.name}</option>
-                  ))}
-                </select>
-              )}
-            </div>
-            {/* Delete toggle */}
-            <label className="flex items-center gap-3 cursor-pointer">
-              <div
-                onClick={() => setWithdrawDelete(d => !d)}
-                className="w-10 h-6 rounded-full transition-colors flex items-center px-1"
-                style={{ background: withdrawDelete ? 'var(--negative)' : 'var(--bg-raised)', border: '1px solid var(--border)' }}>
-                <div className="w-4 h-4 rounded-full transition-transform"
-                  style={{ background: '#fff', transform: withdrawDelete ? 'translateX(16px)' : 'translateX(0)' }} />
+              {actionError && <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{actionError}</p>}
+              <div className="flex gap-2">
+                <button onClick={closeSheet} className="flex-1 py-2.5 rounded-xl text-sm font-mono" style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>Cancel</button>
+                <button onClick={handleWalletWithdraw} disabled={busy} className="flex-1 py-2.5 rounded-xl text-sm font-mono font-semibold active:scale-95" style={{ background: 'rgba(251,191,36,0.1)', color: 'var(--warning)', border: '1px solid rgba(251,191,36,0.3)' }}>{busy ? 'Processing...' : 'Confirm'}</button>
               </div>
-              <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Delete goal after withdrawal</span>
-            </label>
-            {actionError && (
-              <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{actionError}</p>
-            )}
-            <div className="flex gap-2">
-              <button onClick={() => setWithdrawSheet(null)}
-                className="flex-1 py-2.5 rounded-xl text-sm font-mono"
-                style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
-                Cancel
-              </button>
-              <button onClick={handleWithdraw} disabled={withdrawing}
-                className="flex-1 py-2.5 rounded-xl text-sm font-mono font-semibold active:scale-95"
-                style={{ background: 'rgba(96,165,250,0.15)', color: 'var(--accent-blue)', border: '1px solid rgba(96,165,250,0.3)' }}>
-                {withdrawing ? 'Processing...' : 'Confirm Withdrawal'}
-              </button>
-            </div>
+            </>}
+
+            {/* Donate */}
+            {activeSheet === 'donate' && <>
+              <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>Donate from Philanthropy</p>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Balance: {fmt(accounts.philanthropy ?? 0)}</p>
+              <input placeholder="Charity / cause name"
+                className="w-full px-3 py-2 rounded-xl text-sm font-mono"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                value={sheetNote} onChange={e => setSheetNote(e.target.value)} />
+              <input type="number" placeholder="Amount"
+                className="w-full px-3 py-2 rounded-xl text-sm font-mono"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                value={sheetAmount} onChange={e => setSheetAmount(e.target.value)} />
+              {actionError && <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{actionError}</p>}
+              <div className="flex gap-2">
+                <button onClick={closeSheet} className="flex-1 py-2.5 rounded-xl text-sm font-mono" style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>Cancel</button>
+                <button onClick={handleDonate} disabled={busy} className="flex-1 py-2.5 rounded-xl text-sm font-mono font-semibold active:scale-95" style={{ background: 'rgba(74,222,128,0.15)', color: 'var(--positive)', border: '1px solid rgba(74,222,128,0.3)' }}>{busy ? 'Processing...' : 'Confirm Donation'}</button>
+              </div>
+            </>}
+
+            {/* Sub-goal Deposit */}
+            {activeSheet === 'subGoalDeposit' && sheetSubGoal && <>
+              <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>Deposit → "{sheetSubGoal.name}"</p>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Wallet: {fmt(accounts.spending ?? 0)} · Goal: {fmt(sheetSubGoal.balance)} / {fmt(sheetSubGoal.target)}</p>
+              <input type="number" placeholder="Amount"
+                className="w-full px-3 py-2 rounded-xl text-sm font-mono"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                value={sheetAmount} onChange={e => setSheetAmount(e.target.value)} />
+              {actionError && <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{actionError}</p>}
+              <div className="flex gap-2">
+                <button onClick={closeSheet} className="flex-1 py-2.5 rounded-xl text-sm font-mono" style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>Cancel</button>
+                <button onClick={handleSubGoalDeposit} disabled={busy} className="flex-1 py-2.5 rounded-xl text-sm font-mono font-semibold active:scale-95" style={{ background: 'rgba(74,222,128,0.15)', color: 'var(--positive)', border: '1px solid rgba(74,222,128,0.3)' }}>{busy ? 'Depositing...' : 'Confirm Deposit'}</button>
+              </div>
+            </>}
+
+            {/* Sub-goal Withdraw */}
+            {activeSheet === 'subGoalWithdraw' && sheetSubGoal && <>
+              <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>Withdraw from "{sheetSubGoal.name}"</p>
+              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Balance: {fmt(sheetSubGoal.balance)}</p>
+              <input type="number" placeholder="Amount"
+                className="w-full px-3 py-2 rounded-xl text-sm font-mono"
+                style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                value={sheetAmount} onChange={e => setSheetAmount(e.target.value)} />
+              <div className="flex flex-col gap-1">
+                <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>SEND TO</p>
+                <div className="flex gap-2">
+                  {['spending', 'philanthropy', 'subgoal'].map(dest => (
+                    <button key={dest} onClick={() => setSheetDest(dest)} className="flex-1 py-2 rounded-xl text-xs font-mono transition-all"
+                      style={{ background: sheetDest === dest ? 'rgba(96,165,250,0.15)' : 'var(--bg-raised)', color: sheetDest === dest ? 'var(--accent-blue)' : 'var(--text-muted)', border: `1px solid ${sheetDest === dest ? 'rgba(96,165,250,0.3)' : 'var(--border)'}` }}>
+                      {dest === 'subgoal' ? 'Another Goal' : dest.charAt(0).toUpperCase() + dest.slice(1)}
+                    </button>
+                  ))}
+                </div>
+                {sheetDest === 'subgoal' && subGoals.filter(s => s.id !== sheetSubGoal.id).length > 0 && (
+                  <select className="w-full px-3 py-2 rounded-xl text-sm font-mono mt-1"
+                    style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}
+                    value={sheetDestGoal} onChange={e => setSheetDestGoal(e.target.value)}>
+                    <option value="">Select goal…</option>
+                    {subGoals.filter(s => s.id !== sheetSubGoal.id).map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+              <label className="flex items-center gap-3 cursor-pointer">
+                <div onClick={() => setSheetDelete(d => !d)} className="w-10 h-6 rounded-full transition-colors flex items-center px-1"
+                  style={{ background: sheetDelete ? 'var(--negative)' : 'var(--bg-raised)', border: '1px solid var(--border)' }}>
+                  <div className="w-4 h-4 rounded-full transition-transform" style={{ background: '#fff', transform: sheetDelete ? 'translateX(16px)' : 'translateX(0)' }} />
+                </div>
+                <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Delete goal after withdrawal</span>
+              </label>
+              {actionError && <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{actionError}</p>}
+              <div className="flex gap-2">
+                <button onClick={closeSheet} className="flex-1 py-2.5 rounded-xl text-sm font-mono" style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>Cancel</button>
+                <button onClick={handleWithdraw} disabled={busy} className="flex-1 py-2.5 rounded-xl text-sm font-mono font-semibold active:scale-95" style={{ background: 'rgba(96,165,250,0.15)', color: 'var(--accent-blue)', border: '1px solid rgba(96,165,250,0.3)' }}>{busy ? 'Processing...' : 'Confirm Withdrawal'}</button>
+              </div>
+            </>}
+
           </div>
         </div>
       )}

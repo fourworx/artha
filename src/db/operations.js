@@ -974,6 +974,59 @@ export async function parentSubGoalWithdrawal(memberId, amount, metadata) {
   await performSubGoalWithdrawal(memberId, amount, metadata)
 }
 
+// Parent deposits from wallet into savings on child's behalf
+export async function parentDepositToSavings(memberId, amount) {
+  const member = await getMember(memberId)
+  if (!member) throw new Error('Member not found')
+  const spending = member.accounts.spending ?? 0
+  if (amount > spending) throw new Error(`Insufficient wallet balance (${spending} available)`)
+  await updateMemberAccounts(memberId, {
+    ...member.accounts,
+    spending: spending - amount,
+    savings:  (member.accounts.savings ?? 0) + amount,
+  })
+  await addTransaction({
+    id: crypto.randomUUID(), memberId,
+    type: 'deposit', amount: -amount,
+    description: 'Wallet → savings (parent)',
+    date: today(), relatedId: null,
+  })
+  await addTransaction({
+    id: crypto.randomUUID(), memberId,
+    type: 'deposit', amount,
+    description: 'Savings deposit from wallet (parent)',
+    date: today(), relatedId: null,
+  })
+}
+
+// Parent deposits from wallet into a sub-goal on child's behalf
+export async function parentDepositToSubGoal(memberId, subGoalId, amount) {
+  const member = await getMember(memberId)
+  if (!member) throw new Error('Member not found')
+  const spending = member.accounts.spending ?? 0
+  if (amount > spending) throw new Error(`Insufficient wallet balance (${spending} available)`)
+  const subGoals = member.accounts.subGoals ?? []
+  const sg = subGoals.find(g => g.id === subGoalId)
+  if (!sg) throw new Error('Sub-goal not found')
+  const deposit = Math.min(amount, (sg.target ?? Infinity) - (sg.balance ?? 0))
+  await updateMemberAccounts(memberId, {
+    ...member.accounts,
+    spending: spending - deposit,
+    subGoals: subGoals.map(g => g.id === subGoalId ? { ...g, balance: (g.balance ?? 0) + deposit } : g),
+  })
+  await addTransaction({
+    id: crypto.randomUUID(), memberId,
+    type: 'deposit', amount: deposit,
+    description: `Deposit → ${sg.name} (parent)`,
+    date: today(), relatedId: subGoalId,
+  })
+}
+
+// Parent direct cash/bank withdrawal from wallet — no approval queue
+export async function parentWalletWithdrawal(memberId, amount, destination) {
+  await performSpendingWithdrawal(memberId, amount, destination)
+}
+
 // ── Spending wallet cash / bank withdrawal ────────────────────────────────────
 async function performSpendingWithdrawal(memberId, amount, destination) {
   const member = await getMember(memberId)
