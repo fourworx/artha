@@ -250,7 +250,6 @@ function LoanCard({ child, onAddInterest, onEditRepay, fmt, label }) {
               {child.name}
             </p>
             <div className="flex items-center gap-1.5 mt-0.5">
-              <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Tier {child.tier}</span>
               {loan?.interestFree && (
                 <span className="text-xs font-mono px-1.5 py-0.5 rounded"
                   style={{ background: 'rgba(74,222,128,0.12)', color: 'var(--positive)', border: '1px solid rgba(74,222,128,0.25)' }}>

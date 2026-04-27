@@ -314,7 +314,7 @@ export default function Expenses() {
 
         {!loading && rows.length === 0 && (
           <p className="text-xs font-mono text-center py-8" style={{ color: 'var(--text-dim)' }}>
-            No Tier 2 children yet
+            No children yet
           </p>
         )}
 

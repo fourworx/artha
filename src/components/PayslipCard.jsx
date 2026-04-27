@@ -108,7 +108,7 @@ export default function PayslipCard({ payslip, member, familyName }) {
           ARTHA PAYROLL SYSTEM
         </div>
         <div style={{ fontFamily: 'JetBrains Mono', fontSize: '13px', fontWeight: 600, color: 'var(--text-primary)', marginTop: '2px' }}>
-          {member?.name ?? '—'} · Tier {member?.tier}
+          {member?.name ?? '—'}
         </div>
         <div style={{ fontFamily: 'JetBrains Mono', fontSize: '11px', color: 'var(--text-muted)', marginTop: '2px' }}>
           {displayDateFull(payslip.periodStart)} – {displayDateFull(payslip.periodEnd)}

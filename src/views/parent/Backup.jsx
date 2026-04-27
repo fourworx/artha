@@ -476,7 +476,7 @@ export default function Backup() {
                 Generate Test History
               </p>
               <p className="text-xs font-mono leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-                Backdates random chore completions + settled payslips for all Tier 2 children.
+                Backdates random chore completions + settled payslips for all children.
                 70–100% completion rate, random bonus chores. Dev-only — remove before prod.
               </p>
             </div>

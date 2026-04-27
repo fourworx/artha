@@ -42,7 +42,7 @@ function VacationCard({ child, onUpdate }) {
           <div>
             <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{child.name}</p>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-              {fmt(child.baseSalary)}/period · Tier {child.tier}
+              {fmt(child.baseSalary)}/period
             </p>
           </div>
         </div>
@@ -103,13 +103,12 @@ export default function Vacation() {
   const { children, reload } = useFamily()
   const [bulkSaving, setBulkSaving] = useState(false)
 
-  const tier2Children = children.filter(c => c.tier >= 2)
-  const anyOn = tier2Children.some(c => c.config?.vacation?.active)
+  const anyOn = children.some(c => c.config?.vacation?.active)
 
   const handleSetAll = async (active, paidLeave = true) => {
     setBulkSaving(true)
     const vacation = active ? { active: true, paidLeave, startDate: today() } : null
-    await Promise.all(tier2Children.map(c => setMemberVacation(c.id, vacation)))
+    await Promise.all(children.map(c => setMemberVacation(c.id, vacation)))
     await reload()
     setBulkSaving(false)
   }
@@ -134,7 +133,7 @@ export default function Vacation() {
       <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
 
         {/* Bulk actions */}
-        {tier2Children.length > 1 && (
+        {children.length > 1 && (
           <div className="flex flex-col gap-2">
             <p className="text-xs font-mono px-1" style={{ color: 'var(--text-muted)' }}>ALL CHILDREN</p>
             <div className="grid grid-cols-2 gap-2">
@@ -168,12 +167,12 @@ export default function Vacation() {
         {/* Per-child cards */}
         <div className="flex flex-col gap-3">
           <p className="text-xs font-mono px-1" style={{ color: 'var(--text-muted)' }}>PER CHILD</p>
-          {tier2Children.length === 0 ? (
+          {children.length === 0 ? (
             <p className="text-xs font-mono text-center py-8" style={{ color: 'var(--text-dim)' }}>
-              No Tier 2 children yet
+              No children yet
             </p>
           ) : (
-            tier2Children.map(child => (
+            children.map(child => (
               <VacationCard key={child.id} child={child} onUpdate={reload} />
             ))
           )}

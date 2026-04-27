@@ -27,7 +27,7 @@ function MemberSheet({ member, addingRole, onDone, onClose }) {
   const defaultAvatar = isParent ? '👨' : '👦'
   const [name,       setName]       = useState(member?.name ?? '')
   const [avatar,     setAvatar]     = useState(member?.avatar ?? defaultAvatar)
-  const [tier,       setTier]       = useState(member?.tier ?? 2)
+  const tier = 2
   const [salary,     setSalary]     = useState(String(member?.baseSalary ?? 0))
   const [newPin,     setNewPin]     = useState('')
   const [goalName,   setGoalName]   = useState(member?.accounts?.goalJar?.name ?? '')
@@ -173,31 +173,6 @@ function MemberSheet({ member, addingRole, onDone, onClose }) {
             />
           </div>
 
-          {/* Tier (children only) */}
-          {!isParent && (
-            <div className="flex flex-col gap-1">
-              <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>ACCOUNT TYPE</label>
-              <div className="flex gap-2 p-1 rounded-xl" style={{ background: 'var(--bg-raised)' }}>
-                {[
-                  { val: 1, label: '🪙 Tier 1 — Coin Jar' },
-                  { val: 2, label: '📋 Tier 2 — Full Payslip' },
-                ].map(({ val, label }) => (
-                  <button
-                    key={val}
-                    onClick={() => setTier(val)}
-                    className="flex-1 py-2 rounded-lg text-xs font-mono font-semibold transition-all"
-                    style={{
-                      background: tier === val ? 'var(--bg-surface)' : 'transparent',
-                      color: tier === val ? 'var(--text-primary)' : 'var(--text-muted)',
-                      border: tier === val ? '1px solid var(--border)' : '1px solid transparent',
-                    }}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
 
           {/* Salary (children only) */}
           {!isParent && (
@@ -218,11 +193,11 @@ function MemberSheet({ member, addingRole, onDone, onClose }) {
             </div>
           )}
 
-          {/* Goal Jar (Tier 1 — and optionally Tier 2) */}
+          {/* Goal Jar (optional) */}
           {!isParent && (
             <div className="flex flex-col gap-2">
               <label className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-                {tier === 1 ? 'GOAL JAR (required for Tier 1)' : 'GOAL JAR (optional)'}
+                GOAL JAR (optional)
               </label>
               <input
                 value={goalName} onChange={e => setGoalName(e.target.value)}
@@ -345,7 +320,7 @@ export default function Members() {
                   {child.name}
                 </p>
                 <p className="text-xs font-mono mt-0.5" style={{ color: 'var(--text-muted)' }}>
-                  Tier {child.tier} · {fmt(child.baseSalary)}/wk salary
+                  {fmt(child.baseSalary)}/wk salary
                   {child.accounts?.goalJar && ` · 🎯 ${child.accounts.goalJar.name}`}
                 </p>
               </div>
