@@ -837,8 +837,12 @@ export default function Tier2Home() {
       }
       const mandatoryPct = totalExpected > 0 ? Math.round(totalApproved / totalExpected * 100) : 0
 
+      // Use locally-computed mandatoryPct (counts all elapsed days, not just logged days)
+      // calc.earnings.adjustedSalary defaults to full salary when no logs exist — wrong for projection
+      const choreEarned = Math.round(currentMember.baseSalary * mandatoryPct / 100)
+
       setProjected({
-        choreEarned:    calc.earnings.adjustedSalary,   // approved mandatory chore pay only
+        choreEarned,
         chorePotential: currentMember.baseSalary,        // max salary (no streak mixed in)
         streakEarned:   calc.earnings.streakBonus,
         streakPotential: Math.round(currentMember.baseSalary * calc.earnings.streakBonusPct),
