@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { Download, Upload, AlertTriangle, CheckCircle, Cloud, FlaskConical } from 'lucide-react'
 import { addDays, subDays, parseISO, format, getDay } from 'date-fns'
-import { exportAllData, importAllData, getFamily, getMembers, getChores, getPayslipForPeriod } from '../../db/operations'
+import { exportAllData, importAllData, getFamily, getMembers, getChores, getPayslipForPeriod, getMember, giveLoan, giveBonus, getRewards, transferSavingsToWallet, addTransaction, updateMemberAccounts } from '../../db/operations'
 import { migrateToSupabase } from '../../db/migrate'
 import { runPayslip, settlePayslip } from '../../engine/payslip'
 import { supabase } from '../../db/supabase'
@@ -73,10 +73,12 @@ export default function Backup() {
       }
 
       let totalPayslips = 0
+      const rewards = await getRewards(FAMILY_ID)
 
       for (let n = 1; n <= genPeriods; n++) {
         const periodStart = format(subDays(parseISO(cpStart), n * 7), 'yyyy-MM-dd')
         const periodEnd   = format(addDays(parseISO(periodStart), 6), 'yyyy-MM-dd')
+        const isOldest    = n === genPeriods
 
         setGenProgress(`Period ${n}/${genPeriods}: ${periodStart} → ${periodEnd}`)
 
@@ -148,10 +150,79 @@ export default function Backup() {
             if (logErr) throw new Error(`chore_logs insert: ${logErr.message}`)
           }
 
-          // Run payslip for this period
+          // Give a loan in the oldest period so repayments show in subsequent payslips
+          if (isOldest) {
+            const fresh = await getMember(member.id)
+            if (!fresh.accounts?.loan?.outstanding) {
+              await giveLoan(member.id, 300, 50, false)
+            }
+          }
+
+          // Utility charge: random amount 10–60, ~60% of periods
+          if (Math.random() < 0.6) {
+            const utilAmt  = Math.round((10 + Math.random() * 50) / 5) * 5
+            const midDay   = format(addDays(parseISO(periodStart), 3), 'yyyy-MM-dd')
+            await supabase.from('utility_charges').insert({
+              id:          crypto.randomUUID(),
+              family_id:   FAMILY_ID,
+              member_id:   member.id,
+              label:       ['WiFi', 'Electricity', 'Water', 'Netflix share'][Math.floor(Math.random() * 4)],
+              amount:      utilAmt,
+              date:        midDay,
+              charged_at:  new Date(midDay).getTime(),
+            })
+          }
+
+          // Run & settle payslip (utility charges above will be deducted)
           const ps = await runPayslip(member.id, { start: periodStart, end: periodEnd })
           await settlePayslip(ps.id)
           totalPayslips++
+
+          // After settlement, reload member to get updated balances
+          const settled = await getMember(member.id)
+
+          // Parent bonus: ~35% of periods
+          if (Math.random() < 0.35) {
+            const bonusAmt = [20, 30, 50, 75, 100][Math.floor(Math.random() * 5)]
+            await giveBonus(member.id, bonusAmt, 'Well done this week!')
+            // Backdate the transaction to mid-period
+            await supabase.from('transactions')
+              .update({ date: format(addDays(parseISO(periodStart), 4), 'yyyy-MM-dd') })
+              .eq('member_id', member.id)
+              .eq('type', 'parent_bonus')
+              .order('created_at', { ascending: false })
+              .limit(1)
+          }
+
+          // Reward purchase: ~50% of periods if wallet has enough
+          const affordable = rewards.filter(r => r.cost <= (settled.accounts?.spending ?? 0))
+          if (affordable.length > 0 && Math.random() < 0.5) {
+            const reward  = affordable[Math.floor(Math.random() * affordable.length)]
+            const buyDate = format(addDays(parseISO(periodStart), Math.floor(Math.random() * 6)), 'yyyy-MM-dd')
+            const fresh2  = await getMember(member.id)
+            if ((fresh2.accounts?.spending ?? 0) >= reward.cost) {
+              await updateMemberAccounts(member.id, {
+                ...fresh2.accounts,
+                spending: fresh2.accounts.spending - reward.cost,
+              })
+              await addTransaction({
+                id:          crypto.randomUUID(),
+                memberId:    member.id,
+                type:        'reward',
+                amount:      -reward.cost,
+                description: `Reward: ${reward.title}`,
+                date:        buyDate,
+                relatedId:   reward.id,
+              })
+            }
+          }
+
+          // Savings → wallet transfer: ~25% of periods if savings > 100
+          const fresh3 = await getMember(member.id)
+          if ((fresh3.accounts?.savings ?? 0) > 100 && Math.random() < 0.25) {
+            const transferAmt = Math.round(Math.random() * 50 + 20)
+            await transferSavingsToWallet(member.id, Math.min(transferAmt, fresh3.accounts.savings))
+          }
         }
       }
 
