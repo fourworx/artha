@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useCallback, useRef } from 'react'
 import { Plus, X, Check, Pencil, ToggleLeft, ToggleRight } from 'lucide-react'
 import { useFamily, useCurrency, usePeriod } from '../../context/FamilyContext'
 import { addChore, updateChore, toggleChoreActive, updateMember } from '../../db/operations'
@@ -45,8 +45,6 @@ function EarningsSummary({ child, mandatoryChores, allBonusChores, payPeriod, fm
   const totalWeeklyExpected = activeMandatory.reduce((s, c) => s + weeklyFreq(c), 0)
 
   const baseSalary    = child.baseSalary ?? 0
-  const weeklySalary  = payPeriod === 'monthly' ? Math.round(baseSalary * 12 / 52) : baseSalary
-  const monthlySalary = payPeriod === 'monthly' ? baseSalary : Math.round(baseSalary * WEEKS_PER_MONTH)
 
   const applicableBonuses    = allBonusChores.filter(c =>
     c.isActive && (c.assignedTo.length === 0 || c.assignedTo.includes(child.id))
@@ -146,13 +144,13 @@ function EarningsSummary({ child, mandatoryChores, allBonusChores, payPeriod, fm
   )
 }
 
-// ── Bonus tab summary ─────────────────────────────────────────────────────────
+// ── Bonus summary (All tab) ───────────────────────────────────────────────────
 function BonusSummary({ bonusChores, children, fmt }) {
   const activeBonus = bonusChores.filter(c => c.isActive)
   if (activeBonus.length === 0) return null
 
   return (
-    <div className="mx-4 mt-3 px-3 py-3 rounded-xl"
+    <div className="mx-4 mb-3 px-3 py-3 rounded-xl"
       style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)' }}>
       <p className="text-xs font-mono mb-2" style={{ color: 'var(--text-muted)' }}>
         BONUS POTENTIAL (if all claimed weekly)
@@ -181,7 +179,7 @@ function BonusSummary({ bonusChores, children, fmt }) {
 }
 
 // ── Chore form (slide-up sheet) ───────────────────────────────────────────────
-function ChoreForm({ type, initial, childMembers, onSave, onClose }) {
+function ChoreForm({ type, initial, defaultAssigned, childMembers, onSave, onClose }) {
   const fmt = useCurrency()
   const { payPeriod } = usePeriod()
   const isEdit = !!initial
@@ -190,7 +188,7 @@ function ChoreForm({ type, initial, childMembers, onSave, onClose }) {
   const [recurrence,  setRecurrence]  = useState(initial?.recurrence  ?? 'daily')
   const [value,       setValue]       = useState(initial?.value        ?? 0)
   const [daysPerWeek, setDaysPerWeek] = useState(initial?.daysPerWeek ?? 3)
-  const [assignedTo,  setAssignedTo]  = useState(initial?.assignedTo  ?? [])
+  const [assignedTo,  setAssignedTo]  = useState(initial?.assignedTo  ?? defaultAssigned ?? [])
   const [saving,      setSaving]      = useState(false)
   const [error,       setError]       = useState('')
 
@@ -400,7 +398,7 @@ function ChoreForm({ type, initial, childMembers, onSave, onClose }) {
 }
 
 // ── Chore row ─────────────────────────────────────────────────────────────────
-function ChoreRow({ chore, weeklyValue, onEdit, onToggle }) {
+function ChoreRow({ chore, weeklyValue, assignedChildren, onEdit, onToggle }) {
   const fmt = useCurrency()
   return (
     <div className="flex items-center gap-3 px-3 py-3 rounded-xl"
@@ -413,7 +411,7 @@ function ChoreRow({ chore, weeklyValue, onEdit, onToggle }) {
         <p className="text-sm font-mono truncate" style={{ color: 'var(--text-primary)' }}>
           {chore.title}
         </p>
-        <div className="flex items-center gap-2 mt-1">
+        <div className="flex items-center gap-2 mt-1 flex-wrap">
           <RecurrenceBadge recurrence={chore.recurrence} daysPerWeek={chore.daysPerWeek} />
           {chore.type === 'bonus' && chore.value > 0 && (
             <span className="text-xs font-mono font-semibold" style={{ color: 'var(--positive)' }}>
@@ -423,6 +421,12 @@ function ChoreRow({ chore, weeklyValue, onEdit, onToggle }) {
           {chore.type === 'mandatory' && weeklyValue != null && weeklyValue > 0 && (
             <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
               ≈ {fmt(weeklyValue)}/wk
+            </span>
+          )}
+          {/* Show assigned avatars in All view */}
+          {assignedChildren && assignedChildren.length > 0 && (
+            <span className="text-xs font-mono" style={{ color: 'var(--text-dim)', letterSpacing: '0.05em' }}>
+              {assignedChildren.map(c => c.avatar).join(' ')}
             </span>
           )}
         </div>
@@ -439,19 +443,21 @@ function ChoreRow({ chore, weeklyValue, onEdit, onToggle }) {
   )
 }
 
+// ── Section header ─────────────────────────────────────────────────────────────
+function SectionHeader({ label }) {
+  return (
+    <p className="text-xs font-mono px-1" style={{ color: 'var(--text-muted)' }}>{label}</p>
+  )
+}
+
 // ── Main screen ───────────────────────────────────────────────────────────────
 export default function ChoreManager() {
   const { chores: allChores, children, reload } = useFamily()
   const fmt = useCurrency()
   const { payPeriod } = usePeriod()
 
-  const [tab,         setTab]         = useState('mandatory')
-  const [childFilter, setChildFilter] = useState(null)
-  const [form,        setForm]        = useState(null) // null | { type, initial? }
-
-  useEffect(() => {
-    if (children.length > 0 && !childFilter) setChildFilter(children[0].id)
-  }, [children, childFilter])
+  const [selectedChild, setSelectedChild] = useState(null) // null = All
+  const [form, setForm] = useState(null) // null | { type, initial?, defaultAssigned? }
 
   const handleSave = useCallback(async () => {
     await reload()
@@ -463,17 +469,24 @@ export default function ChoreManager() {
     await reload()
   }, [reload])
 
-  const mandatoryChores = allChores
-    .filter(c => c.type === 'mandatory' && (!childFilter || c.assignedTo.includes(childFilter)))
-  const bonusChores = allChores.filter(c => c.type === 'bonus')
-  const displayed   = tab === 'mandatory' ? mandatoryChores : bonusChores
+  const mandatoryChores = allChores.filter(c => c.type === 'mandatory')
+  const bonusChores     = allChores.filter(c => c.type === 'bonus')
 
-  // Per-completion value for the selected child's mandatory chores
-  const selectedChild = children.find(c => c.id === childFilter)
-  const activeMandatory = mandatoryChores.filter(c => c.isActive)
+  const child = children.find(c => c.id === selectedChild) ?? null
+
+  const filteredMandatory = selectedChild
+    ? mandatoryChores.filter(c => c.assignedTo.includes(selectedChild))
+    : mandatoryChores
+
+  const filteredBonus = selectedChild
+    ? bonusChores.filter(c => c.assignedTo.length === 0 || c.assignedTo.includes(selectedChild))
+    : bonusChores
+
+  // Per-completion value for the selected child
+  const activeMandatory     = filteredMandatory.filter(c => c.isActive)
   const totalWeeklyExpected = activeMandatory.reduce((s, c) => s + weeklyFreq(c), 0)
-  const perCompletion = selectedChild && totalWeeklyExpected > 0
-    ? selectedChild.baseSalary / totalWeeklyExpected
+  const perCompletion       = child && totalWeeklyExpected > 0
+    ? child.baseSalary / totalWeeklyExpected
     : null
 
   return (
@@ -486,84 +499,111 @@ export default function ChoreManager() {
         </h2>
       </div>
 
-      {/* Tabs */}
-      <div className="flex shrink-0 px-4 pt-3 gap-2">
-        {['mandatory', 'bonus'].map(t => (
-          <button key={t} onClick={() => setTab(t)}
-            className="px-4 py-1.5 rounded-lg text-xs font-mono transition-all"
+      {/* Child tabs */}
+      <div className="flex shrink-0 px-4 pt-3 gap-2 overflow-x-auto">
+        <button
+          onClick={() => setSelectedChild(null)}
+          className="px-4 py-1.5 rounded-lg text-xs font-mono transition-all whitespace-nowrap"
+          style={{
+            background: selectedChild === null ? 'var(--accent-blue)' : 'var(--bg-raised)',
+            border: `1px solid ${selectedChild === null ? 'var(--accent-blue)' : 'var(--border)'}`,
+            color: selectedChild === null ? '#fff' : 'var(--text-muted)',
+          }}>
+          All
+        </button>
+        {children.map(c => (
+          <button key={c.id}
+            onClick={() => setSelectedChild(c.id)}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono transition-all whitespace-nowrap"
             style={{
-              background: tab === t ? 'var(--accent-blue)' : 'var(--bg-raised)',
-              border: `1px solid ${tab === t ? 'var(--accent-blue)' : 'var(--border)'}`,
-              color: tab === t ? '#fff' : 'var(--text-muted)',
+              background: selectedChild === c.id ? 'var(--accent-blue)' : 'var(--bg-raised)',
+              border: `1px solid ${selectedChild === c.id ? 'var(--accent-blue)' : 'var(--border)'}`,
+              color: selectedChild === c.id ? '#fff' : 'var(--text-muted)',
             }}>
-            {t === 'mandatory' ? 'Mandatory' : 'Bonus ⚡'}
+            <span>{c.avatar}</span>
+            <span>{c.name}</span>
           </button>
         ))}
       </div>
 
-      {/* Child filter (mandatory tab only) */}
-      {tab === 'mandatory' && (
-        <div className="flex shrink-0 px-4 pt-3 gap-2">
-          {children.map(child => (
-            <button key={child.id} onClick={() => setChildFilter(child.id)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-mono transition-all"
-              style={{
-                background: childFilter === child.id ? 'var(--bg-raised)' : 'transparent',
-                border: `1px solid ${childFilter === child.id ? 'var(--border-bright)' : 'transparent'}`,
-                color: childFilter === child.id ? 'var(--text-primary)' : 'var(--text-muted)',
-              }}>
-              <span>{child.avatar}</span>
-              <span>{child.name}</span>
-            </button>
-          ))}
-        </div>
-      )}
+      {/* Scrollable body */}
+      <div className="flex-1 overflow-y-auto px-4 py-4 flex flex-col gap-4">
 
-      {/* Earnings summary */}
-      {tab === 'mandatory' && selectedChild && (
-        <EarningsSummary
-          child={selectedChild}
-          mandatoryChores={mandatoryChores}
-          allBonusChores={bonusChores}
-          payPeriod={payPeriod}
-          fmt={fmt}
-          onSalaryChange={reload}
-        />
-      )}
-      {tab === 'bonus' && (
-        <BonusSummary bonusChores={bonusChores} children={children} fmt={fmt} />
-      )}
-
-      {/* Chore list */}
-      <div className="flex-1 overflow-y-auto px-4 py-3 flex flex-col gap-2">
-        {displayed.length === 0 && (
-          <p className="text-xs font-mono text-center py-8" style={{ color: 'var(--text-muted)' }}>
-            No chores yet — tap + to add one
-          </p>
-        )}
-        {displayed.map(chore => (
-          <ChoreRow
-            key={chore.id}
-            chore={chore}
-            weeklyValue={
-              chore.type === 'mandatory' && perCompletion != null
-                ? Math.round(weeklyFreq(chore) * perCompletion)
-                : null
-            }
-            onEdit={() => setForm({ type: chore.type, initial: chore })}
-            onToggle={() => handleToggle(chore)}
+        {/* Earnings summary — only when a child is selected */}
+        {child && (
+          <EarningsSummary
+            child={child}
+            mandatoryChores={filteredMandatory}
+            allBonusChores={bonusChores}
+            payPeriod={payPeriod}
+            fmt={fmt}
+            onSalaryChange={reload}
           />
-        ))}
+        )}
+
+        {/* MANDATORY section */}
+        <div className="flex flex-col gap-2">
+          <SectionHeader label="MANDATORY" />
+          {filteredMandatory.length === 0 ? (
+            <p className="text-xs font-mono text-center py-4" style={{ color: 'var(--text-dim)' }}>
+              No mandatory chores{child ? ` for ${child.name}` : ''} — tap + to add
+            </p>
+          ) : (
+            filteredMandatory.map(chore => (
+              <ChoreRow
+                key={chore.id}
+                chore={chore}
+                weeklyValue={perCompletion != null ? Math.round(weeklyFreq(chore) * perCompletion) : null}
+                assignedChildren={selectedChild ? null : children.filter(c => chore.assignedTo.includes(c.id))}
+                onEdit={() => setForm({ type: 'mandatory', initial: chore })}
+                onToggle={() => handleToggle(chore)}
+              />
+            ))
+          )}
+        </div>
+
+        {/* BONUS section */}
+        <div className="flex flex-col gap-2">
+          <SectionHeader label="BONUS ⚡" />
+          {/* Bonus potential summary in All view */}
+          {!child && <BonusSummary bonusChores={bonusChores} children={children} fmt={fmt} />}
+          {filteredBonus.length === 0 ? (
+            <p className="text-xs font-mono text-center py-4" style={{ color: 'var(--text-dim)' }}>
+              No bonus chores{child ? ` for ${child.name}` : ''} — tap + to add
+            </p>
+          ) : (
+            filteredBonus.map(chore => (
+              <ChoreRow
+                key={chore.id}
+                chore={chore}
+                weeklyValue={null}
+                assignedChildren={selectedChild ? null : children.filter(c => chore.assignedTo.includes(c.id))}
+                onEdit={() => setForm({ type: 'bonus', initial: chore })}
+                onToggle={() => handleToggle(chore)}
+              />
+            ))
+          )}
+        </div>
       </div>
 
-      {/* Add button */}
-      <div className="px-4 py-3 shrink-0" style={{ borderTop: '1px solid var(--border)' }}>
+      {/* Add buttons */}
+      <div className="px-4 py-3 shrink-0 flex gap-2" style={{ borderTop: '1px solid var(--border)' }}>
         <button
-          onClick={() => setForm({ type: tab === 'bonus' ? 'bonus' : 'mandatory' })}
-          className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
+          onClick={() => setForm({
+            type: 'mandatory',
+            defaultAssigned: child ? [child.id] : [],
+          })}
+          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
           style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-primary)' }}>
           <Plus size={16} />
-          Add {tab === 'mandatory' ? 'Mandatory' : 'Bonus'} Chore
+          Mandatory
+        </button>
+        <button
+          onClick={() => setForm({ type: 'bonus', defaultAssigned: [] })}
+          className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
+          style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--warning)' }}>
+          <Plus size={16} />
+          Bonus ⚡
         </button>
       </div>
 
@@ -572,6 +612,7 @@ export default function ChoreManager() {
         <ChoreForm
           type={form.type}
           initial={form.initial}
+          defaultAssigned={form.defaultAssigned}
           childMembers={children}
           onSave={handleSave}
           onClose={() => setForm(null)}
