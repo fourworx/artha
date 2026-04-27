@@ -837,13 +837,11 @@ export default function Tier2Home() {
       }
       const mandatoryPct = totalExpected > 0 ? Math.round(totalApproved / totalExpected * 100) : 0
 
-      // ── Potential gross: full salary + streak bonus (bonus chores shown separately) ──
-      const potentialGross = currentMember.baseSalary
-        + Math.round(currentMember.baseSalary * calc.earnings.streakBonusPct)
-
       setProjected({
-        earnedGross:    calc.gross,
-        potentialGross,
+        choreEarned:    calc.earnings.adjustedSalary,   // approved mandatory chore pay only
+        chorePotential: currentMember.baseSalary,        // max salary (no streak mixed in)
+        streakEarned:   calc.earnings.streakBonus,
+        streakPotential: Math.round(currentMember.baseSalary * calc.earnings.streakBonusPct),
         mandatoryPct,
         bonusEarned:    calc.earnings.bonusChoreEarnings,
         bonusPotential: calc.bonusPotential ?? 0,
@@ -1137,8 +1135,8 @@ export default function Tier2Home() {
 
         {/* Projected earnings widget */}
         {projected !== null && (() => {
-          const totalEarned    = projected.earnedGross + projected.bonusEarned + (projected.interest ?? 0)
-          const totalPotential = projected.potentialGross + (projected.bonusPotential ?? 0) + (projected.interest ?? 0)
+          const totalEarned    = projected.choreEarned + projected.streakEarned + projected.bonusEarned + (projected.interest ?? 0)
+          const totalPotential = projected.chorePotential + projected.streakPotential + (projected.bonusPotential ?? 0) + (projected.interest ?? 0)
           const pctColor       = projected.mandatoryPct === 100 ? 'var(--positive)' : 'var(--warning)'
           const pctBg          = projected.mandatoryPct === 100 ? 'rgba(74,222,128,0.12)' : 'rgba(251,191,36,0.1)'
 
@@ -1167,7 +1165,7 @@ export default function Tier2Home() {
 
               {/* Equation row */}
               <div className="flex items-start gap-2 flex-wrap">
-                <Frac top={fmt(projected.earnedGross)} bot={fmt(projected.potentialGross)} label="CHORES" color={pctColor} />
+                <Frac top={fmt(projected.choreEarned)} bot={fmt(projected.chorePotential)} label="CHORES" color={pctColor} />
                 {projected.bonusPotential > 0 && <>
                   <Op ch="+" />
                   <Frac top={fmt(projected.bonusEarned)} bot={fmt(projected.bonusPotential)} label="BONUS" color="var(--warning)" />
