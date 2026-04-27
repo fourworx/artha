@@ -319,7 +319,7 @@ export default function ChildDetail() {
               </span>
             </div>
             <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-              Tier {child.tier} · {fmt(child.baseSalary)}/{periodLabel}
+              {fmt(child.baseSalary)}/{periodLabel}
             </p>
           </div>
         </div>

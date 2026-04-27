@@ -96,7 +96,7 @@ function AvatarGrid({ members, onSelect, selected }) {
               {member.name}
             </span>
             <span className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-              {member.role === 'parent' ? 'Parent' : `Tier ${member.tier}`}
+              {member.role === 'parent' ? 'Parent' : 'Child'}
             </span>
           </button>
         ))}
@@ -145,8 +145,6 @@ export default function PinAuth() {
       // Route based on role and tier
       if (selectedMember.role === 'parent') {
         navigate('/parent')
-      } else if (selectedMember.tier === 1) {
-        navigate('/child/jar')
       } else {
         navigate('/child/home')
       }

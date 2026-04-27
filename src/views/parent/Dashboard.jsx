@@ -624,9 +624,8 @@ export default function ParentDashboard() {
     if (!family?.config?.autoPayslip || !payday || autoRanRef.current) return
     autoRanRef.current = true
     const autoRun = async () => {
-      const tier2 = children.filter(c => c.tier >= 2)
-      if (tier2.length === 0) return
-      await Promise.allSettled(tier2.map(c => runPayslip(c.id)))
+      if (children.length === 0) return
+      await Promise.allSettled(children.map(c => runPayslip(c.id)))
       await reload()
       await refreshBanners()
     }
@@ -715,14 +714,13 @@ export default function ParentDashboard() {
 
   // Check for draft payslips whose period has ended
   const refreshBanners = useCallback(async () => {
-    const tier2 = children.filter(c => c.tier >= 2)
-    const tier2Ids = tier2.map(c => c.id)
-    if (!tier2Ids.length) {
+    const childIds = children.map(c => c.id)
+    if (!childIds.length) {
       setOverdueDrafts([]); setCurrentDrafts([]); setAllRan(false); return
     }
     const [drafts, payslipChecks] = await Promise.all([
-      getOverdueDrafts(tier2Ids, periodEnd),
-      Promise.all(tier2.map(c => getPayslipForPeriod(c.id, periodEnd))),
+      getOverdueDrafts(childIds, periodEnd),
+      Promise.all(children.map(c => getPayslipForPeriod(c.id, periodEnd))),
     ])
     setOverdueDrafts(drafts)
     const currentPs = payslipChecks.filter(Boolean)
@@ -813,7 +811,7 @@ export default function ParentDashboard() {
                     <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
                       {child.name}
                     </p>
-                    {child.tier >= 2 && (() => {
+                    {(() => {
                       const score = child.creditScore ?? 500
                       const color = score >= 700 ? 'var(--positive)' : score >= 500 ? 'var(--warning)' : 'var(--negative)'
                       const bg    = score >= 700 ? 'rgba(74,222,128,0.1)' : score >= 500 ? 'rgba(251,191,36,0.1)' : 'rgba(239,68,68,0.1)'
@@ -826,7 +824,7 @@ export default function ParentDashboard() {
                     })()}
                   </div>
                   <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>
-                    Tier {child.tier} · {fmt(child.baseSalary)}/{periodLabel}
+                    {fmt(child.baseSalary)}/{periodLabel}
                   </p>
                 </div>
               </div>
@@ -840,23 +838,21 @@ export default function ParentDashboard() {
                   title="Mark chores done">
                   <ClipboardCheck size={14} />
                 </button>
-                {child.tier >= 2 && <>
-                  <RunPayslipButton child={child} periodEnd={periodEnd} payday={payday} onDone={async () => { await reload(); await refreshBanners() }} />
-                  <button
-                    onClick={() => setViewPayslipFor(child)}
-                    className="p-1.5 rounded-lg transition-all active:scale-95"
-                    style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
-                    title="View latest payslip">
-                    <FileText size={14} />
-                  </button>
-                  <button
-                    onClick={() => setGivingTo(child)}
-                    className="p-1.5 rounded-lg transition-all active:scale-95"
-                    style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
-                    title="Give bonus or loan">
-                    <Plus size={14} />
-                  </button>
-                </>}
+                <RunPayslipButton child={child} periodEnd={periodEnd} payday={payday} onDone={async () => { await reload(); await refreshBanners() }} />
+                <button
+                  onClick={() => setViewPayslipFor(child)}
+                  className="p-1.5 rounded-lg transition-all active:scale-95"
+                  style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+                  title="View latest payslip">
+                  <FileText size={14} />
+                </button>
+                <button
+                  onClick={() => setGivingTo(child)}
+                  className="p-1.5 rounded-lg transition-all active:scale-95"
+                  style={{ background: 'var(--bg-raised)', border: '1px solid var(--border)', color: 'var(--text-muted)' }}
+                  title="Give bonus or loan">
+                  <Plus size={14} />
+                </button>
               </div>
 
               {/* Outstanding loan chip */}
@@ -879,31 +875,19 @@ export default function ParentDashboard() {
                 />
               )}
 
-              {/* Balances (Tier 2+) */}
-              {child.tier >= 2 && (
-                <div className="grid grid-cols-3 gap-2 mt-3">
-                  {[
-                    { label: 'SPENDING',     value: child.accounts?.spending     ?? 0, color: 'var(--positive)' },
-                    { label: 'SAVINGS',      value: child.accounts?.savings      ?? 0, color: 'var(--accent-blue)' },
-                    { label: 'PHILANTHROPY', value: child.accounts?.philanthropy ?? 0, color: '#D4A017' },
-                  ].map(({ label, value, color }) => (
-                    <div key={label} className="p-2 rounded-lg text-center" style={{ background: 'var(--bg-raised)' }}>
-                      <p className="text-xs font-mono" style={{ color: 'var(--text-muted)', fontSize: '9px' }}>{label}</p>
-                      <p className="text-sm font-mono font-semibold mt-0.5" style={{ color }}>{fmt(value)}</p>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* Tier 1 — goal jar only */}
-              {child.tier === 1 && child.accounts?.goalJar && (
-                <div className="mt-3 p-2 rounded-lg text-center" style={{ background: 'var(--bg-raised)' }}>
-                  <p className="text-xs font-mono" style={{ color: 'var(--text-muted)', fontSize: '9px' }}>GOAL JAR</p>
-                  <p className="text-sm font-mono font-semibold mt-0.5" style={{ color: 'var(--warning)' }}>
-                    {fmt(child.accounts.goalJar.balance)} / {fmt(child.accounts.goalJar.target)}
-                  </p>
-                </div>
-              )}
+              {/* Balances */}
+              <div className="grid grid-cols-3 gap-2 mt-3">
+                {[
+                  { label: 'SPENDING',     value: child.accounts?.spending     ?? 0, color: 'var(--positive)' },
+                  { label: 'SAVINGS',      value: child.accounts?.savings      ?? 0, color: 'var(--accent-blue)' },
+                  { label: 'PHILANTHROPY', value: child.accounts?.philanthropy ?? 0, color: '#D4A017' },
+                ].map(({ label, value, color }) => (
+                  <div key={label} className="p-2 rounded-lg text-center" style={{ background: 'var(--bg-raised)' }}>
+                    <p className="text-xs font-mono" style={{ color: 'var(--text-muted)', fontSize: '9px' }}>{label}</p>
+                    <p className="text-sm font-mono font-semibold mt-0.5" style={{ color }}>{fmt(value)}</p>
+                  </div>
+                ))}
+              </div>
             </div>
           )
         })}

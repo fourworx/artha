@@ -3,7 +3,7 @@ import { Check, X, RefreshCw, Gift, Heart, Target, Landmark, Banknote } from 'lu
 import { useFamily } from '../../context/FamilyContext'
 import {
   getPendingLogsForMembers, approveChoreLog, rejectChoreLog,
-  approveBonusChoreLog, approveTier1ChoreLog,
+  approveBonusChoreLog,
   getPendingRewardRequests, approveRewardRequest, rejectRewardRequest,
   updateCreditScore,
   getPendingMemberRequests, approveDonation, approveSubGoalWithdrawal, approveSpendingWithdrawal, approveSavingsWithdrawal, resolveMemberRequest,
@@ -60,17 +60,7 @@ export default function ApproveChores() {
     const chore  = choreMap[log.choreId]
     const member = memberMap[log.memberId]
     try {
-      if (member?.tier === 1) {
-        const tier1Chores = chores.filter(c =>
-          c.type === 'mandatory' && c.isActive && c.assignedTo.includes(member.id)
-        )
-        const totalWeeklyExpected = tier1Chores.reduce((s, c) => s + weeklyFreq(c), 0)
-        const coinAmount = totalWeeklyExpected > 0
-          ? Math.round((member.baseSalary ?? 0) / totalWeeklyExpected)
-          : 1
-        await approveTier1ChoreLog(log.id, log.memberId, coinAmount)
-        await reload()
-      } else if (chore?.type === 'bonus') {
+      if (chore?.type === 'bonus') {
         await approveBonusChoreLog(log.id)
         await reload()
       } else {

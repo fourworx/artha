@@ -41,8 +41,6 @@ import FamilyFund from './views/child-tier2/FamilyFund'
 import Rewards    from './views/child-tier2/Rewards'
 import History    from './views/child-tier2/History'
 
-// Child Tier 1
-import CoinJar from './views/child-tier1/CoinJar'
 
 import { DeviceContext } from './context/DeviceContext'
 export { useDevice } from './context/DeviceContext'
@@ -216,7 +214,7 @@ function Tier2Shell() {
     }).catch(() => {})
   }, [reloadCount]) // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (!currentMember || currentMember.role !== 'child' || currentMember.tier < 2) {
+  if (!currentMember || currentMember.role !== 'child') {
     return <Navigate to="/" replace />
   }
   return (
@@ -242,15 +240,6 @@ function Tier2Shell() {
       )}
     </div>
   )
-}
-
-// ── Tier 1 guard ──────────────────────────────────────────────────────────────
-function Tier1Guard() {
-  const { currentMember } = useAuth()
-  if (!currentMember || currentMember.role !== 'child' || currentMember.tier !== 1) {
-    return <Navigate to="/" replace />
-  }
-  return <CoinJar />
 }
 
 // ── App ───────────────────────────────────────────────────────────────────────
@@ -295,9 +284,6 @@ export default function App() {
               <Route path="rewards" element={<Rewards />} />
               <Route path="history" element={<Navigate to="/child/ledger" replace />} />
             </Route>
-
-            {/* Tier 1 */}
-            <Route path="/child/jar" element={<Tier1Guard />} />
 
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
