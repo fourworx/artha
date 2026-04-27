@@ -432,7 +432,7 @@ export default function ChildDetail() {
                       return [value, name]
                     }}
                   />
-                  <Bar yAxisId="left" dataKey="earned" stackId="a" fill="#F59E0B" radius={[0, 0, 3, 3]} />
+                  <Bar yAxisId="left" dataKey="earned" stackId="a" fill="#4ade80" radius={[0, 0, 3, 3]} />
                   <Bar yAxisId="left" dataKey="uncaptured" stackId="a" fill="var(--bg-raised)" stroke="var(--border)" strokeWidth={1} radius={[3, 3, 0, 0]} />
                   <Line yAxisId="right" type="monotone" dataKey="pct" stroke="var(--warning)" strokeWidth={2} dot={{ fill: 'var(--warning)', r: 3, strokeWidth: 0 }} />
                 </ComposedChart>

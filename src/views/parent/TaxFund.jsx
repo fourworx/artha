@@ -73,7 +73,7 @@ export default function TaxFund() {
   const [actingVote,   setActingVote]   = useState(null)
 
   const balance   = family?.taxFundBalance ?? 0
-  const history   = [...(family?.taxFundHistory ?? [])].reverse()
+  const history   = [...(family?.taxFundHistory ?? [])].sort((a, b) => b.date.localeCompare(a.date))
   const config    = family?.config ?? {}
   const goal      = config.taxFundGoal ?? 0
   const goalName  = config.taxFundGoalLabel ?? ''
