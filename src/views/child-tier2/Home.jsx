@@ -1051,16 +1051,11 @@ export default function Tier2Home() {
               style={{ color: spentThisPeriod > 0 ? 'var(--negative)' : 'var(--text-dim)' }}>
               {spentThisPeriod !== null ? fmt(spentThisPeriod) : '—'}
             </p>
-            {prevPeriodSpent !== null && (() => {
-              const better = spentThisPeriod !== null && spentThisPeriod < prevPeriodSpent
-              const worse  = spentThisPeriod !== null && spentThisPeriod > prevPeriodSpent
-              const color  = better ? 'var(--positive)' : worse ? 'var(--negative)' : 'var(--text-dim)'
-              return (
-                <p className="text-xs font-mono mt-1" style={{ color }}>
-                  {fmt(prevPeriodSpent)} last period
-                </p>
-              )
-            })()}
+            {prevPeriodSpent !== null && (
+              <p className="text-xs font-mono mt-1" style={{ color: 'var(--negative)' }}>
+                {fmt(prevPeriodSpent)} last period
+              </p>
+            )}
             <div className="mt-2 -mx-1">
               <Sparkline data={spentHistory} color="#f87171" />
             </div>
