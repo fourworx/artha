@@ -3,7 +3,7 @@ import {
   getMember, getFamily, getChores,
   getChoreLogsForPeriod, getUtilityCharges,
   addPayslip, updateMemberAccounts, updateTaxFund, addTransaction, updateCreditScore,
-  getPayslipForPeriod, getPayslip, updatePayslipStatus, updatePayslipCreditScore,
+  getPayslipForPeriod, getPayslip, getLatestPayslip, updatePayslipStatus, updatePayslipCreditScore,
 } from '../db/operations'
 import { roundRupees } from '../utils/currency'
 import { currentPeriodStart, currentPeriodEnd, daysAgo } from '../utils/dates'
