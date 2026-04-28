@@ -1,7 +1,84 @@
 ---
-name: Artha — Session 17 Handoff
-description: Full current state after sessions 1–17; use to resume in next session
+name: Artha — Session 18 Handoff
+description: Full current state after sessions 1–18; use to resume in next session
 type: project
+---
+
+## Session 18 completed (2026-04-28)
+
+### Features built / bugs fixed
+
+**ChoreManager — child-first tab layout**
+- Replaced `tab` + `childFilter` state with single `selectedChild` (null = All, or child.id)
+- Child tabs at top: [All] + one tab per child with avatar + name
+- Under each child tab: EarningsSummary (base salary + completion count) + MANDATORY section + BONUS ⚡ section together
+- All view: ChoreRow shows assignedChildren avatars inline
+- Two "Add" buttons: "Mandatory" and "Bonus ⚡" — pre-assign to current child if a child tab is selected
+- `ChoreForm` gained `defaultAssigned` prop: `useState(initial?.assignedTo ?? defaultAssigned ?? [])`
+
+**BASE SALARY label wrapping fix (ChoreManager)**
+- Was: `<span>` inside `<p>` caused X and "completions/wk" to wrap to separate lines
+- Fix: two separate `<p>` elements render them on the same line
+
+**Custom reward categories (RewardManager)**
+- Added "✏️ Other…" button in category grid → reveals auto-focused free-text input
+- `isPreset()` helper detects custom categories on edit; populates `customCat` field
+- `effectiveCategory = category === 'other' ? customCat.trim() : category`
+- Display already falls back to raw string for unknown categories — no other changes needed
+
+**Analytics — parent ChildDetail (3 new charts replacing "Where does money go")**
+- Removed confusing donut chart showing absolute spending number
+- Added: SALARY CAPTURED VS MAX (`ComposedChart` dual-Y stacked bars + line), SAVINGS GROWTH (projection), TOP REWARDS (horizontal bars)
+- `settledSorted` base array used for all chart data (DRY)
+- Net worth card is now clickable → inline net worth breakdown sheet (wallet, savings, sub-goals, philanthropy, loan, net total)
+- Added `showNetWorth` state; `ShoppingBag` icon for Buy Reward button
+
+**TopRewardsChart component (new)**
+- `src/components/TopRewardsChart.jsx` — filters `type === 'reward'` transactions, strips "Reward: " prefix, groups + ranks top 5, horizontal purple gradient bars, total footer
+
+**Analytics ported to child Home**
+- Child Home now shows all 4 charts: SALARY CAPTURED VS MAX, BONUS CHORE PERFORMANCE, INCOME ALLOCATION, TOP REWARDS SPENT ON
+- Wallet card button navigates to `/child/wallet` (was `/child/ledger`), labelled "Spend & transfer →"
+
+**Full-screen child Wallet (`/child/wallet`)**
+- Balance header + Save button (→ `parentDepositToSavings`, immediate) + Cash Out button (→ `addMemberRequest 'cash_withdrawal'`)
+- Full reward catalog below with BuySheet confirmation flow
+- New route added in App.jsx
+
+**Parent ChildDetail — Buy Reward full screen**
+- Replaced cramped bottom sheet with `BuyRewardScreen` component (full-screen fixed overlay)
+- Category filter tab row, 2-column reward grid, confirm bar with wallet before/after preview
+- Disabled + shows "Need ₹X more" when insufficient funds
+- `showBuyReward` state; button switches from `openSheet('buyReward')` to `setShowBuyReward(true)`
+
+**parentBuyReward operation (new)**
+- `src/db/operations.js`: direct debit from spending, logs `type: 'reward'` transaction — no request queue needed (parent is already approving)
+
+**Generate Test History — fixes**
+- Critical bug: `r.cost` → `r.price` (mapReward maps DB `cost` → JS `price`; rewards were never generated)
+- Child filter: `m.tier >= 2` → `m.role === 'child'`
+- Added donations (~30% chance per period from philanthropy balance)
+- Added sub-goal deposits (~25% chance if incomplete sub-goals exist)
+- Reward purchases: 1–2 per period (65% chance each attempt)
+
+**Reset All History & Wallets (Backup screen)**
+- New "Reset All History & Wallets" button in Generate Test History card
+- Two-step confirm (shows red warning before wiping)
+- Wipes: `chore_logs`, `transactions`, `payslips`, `utility_charges`, `reward_requests`, `member_requests`
+- Zeros: all child `spending`, `savings`, `philanthropy`, `subGoals[].balance`
+- Zeros: `tax_fund_balance` and `tax_fund_history` on the family row
+
+### Files changed (session 18)
+- `src/views/parent/ChoreManager.jsx` — full rewrite (child-first tabs, defaultAssigned)
+- `src/views/parent/ChildDetail.jsx` — BuyRewardScreen component, showNetWorth, showBuyReward, 3 new charts, TopRewardsChart import
+- `src/views/parent/RewardManager.jsx` — custom categories (Other… free-text)
+- `src/views/parent/Backup.jsx` — test history bug fixes (r.cost→r.price, tier filter, donations, sub-goals), Reset button
+- `src/components/TopRewardsChart.jsx` — new horizontal bar chart component
+- `src/views/child-tier2/Home.jsx` — wallet→/child/wallet navigation, 4 chart blocks added
+- `src/views/child-tier2/Wallet.jsx` — new full-screen wallet view
+- `src/db/operations.js` — `parentBuyReward` added
+- `src/App.jsx` — Wallet route added
+
 ---
 
 ## Session 17 completed (2026-04-27)
