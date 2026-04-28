@@ -11,6 +11,7 @@ import SavingsGrowthChart from '../../components/SavingsGrowthChart'
 import TopRewardsChart from '../../components/TopRewardsChart'
 import { ComposedChart, Bar, Line, XAxis, YAxis, Tooltip, ResponsiveContainer, CartesianGrid } from 'recharts'
 import { CreditScoreLineChart } from '../child-tier2/Home'
+import { REWARD_CATEGORIES } from '../../utils/constants'
 
 const TYPE_META = {
   salary:        { label: 'Salary',            emoji: '💼', color: 'var(--positive)' },
@@ -84,6 +85,139 @@ function PeriodTxs({ memberId, periodStart, periodEnd }) {
   )
 }
 
+// ── Full-screen Buy Reward for parent ────────────────────────────────────────
+function BuyRewardScreen({ child, rewards, fmt, onClose, onDone }) {
+  const [activeCategory, setCategory] = useState('all')
+  const [confirming, setConfirming]   = useState(null) // reward being confirmed
+  const [busy, setBusy]               = useState(false)
+  const [error, setError]             = useState('')
+
+  const spending  = child.accounts?.spending ?? 0
+  const categories = ['all', ...new Set(rewards.map(r => r.category).filter(Boolean))]
+  const filtered   = rewards.filter(r =>
+    r.isActive && (activeCategory === 'all' || r.category === activeCategory)
+  )
+
+  const handleBuy = async () => {
+    if (!confirming || busy) return
+    setBusy(true); setError('')
+    try {
+      await parentBuyReward(child.id, confirming.id, confirming.title, confirming.price)
+      onDone()
+    } catch (e) { setError(e.message ?? 'Failed') }
+    finally { setBusy(false) }
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex flex-col" style={{ background: 'var(--bg-base)' }}>
+      {/* Header */}
+      <div className="px-4 py-4 shrink-0" style={{ borderBottom: '1px solid var(--border)' }}>
+        <button onClick={onClose}
+          className="flex items-center gap-1 mb-2 -ml-1"
+          style={{ color: 'var(--text-muted)', background: 'none', border: 'none' }}>
+          <ChevronLeft size={16} />
+          <span className="text-xs font-mono">Back</span>
+        </button>
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>BUY REWARD FOR</p>
+            <h2 className="text-base font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>
+              {child.avatar} {child.name}
+            </h2>
+          </div>
+          <div className="text-right">
+            <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>WALLET</p>
+            <p className="text-lg font-mono font-bold" style={{ color: 'var(--positive)' }}>{fmt(spending)}</p>
+          </div>
+        </div>
+      </div>
+
+      {/* Category filter */}
+      <div className="flex gap-2 px-4 pt-3 pb-2 shrink-0 overflow-x-auto">
+        {categories.map(cat => {
+          const meta = REWARD_CATEGORIES[cat]
+          return (
+            <button key={cat} onClick={() => setCategory(cat)}
+              className="flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-mono whitespace-nowrap transition-all shrink-0"
+              style={{
+                background: activeCategory === cat ? 'var(--accent-blue)' : 'var(--bg-raised)',
+                border: `1px solid ${activeCategory === cat ? 'var(--accent-blue)' : 'var(--border)'}`,
+                color: activeCategory === cat ? '#fff' : 'var(--text-muted)',
+              }}>
+              {meta ? `${meta.emoji} ${meta.label}` : cat === 'all' ? 'All' : cat}
+            </button>
+          )
+        })}
+      </div>
+
+      {/* Reward grid */}
+      <div className="flex-1 overflow-y-auto px-4 pb-4">
+        <div className="grid grid-cols-2 gap-3 pt-1">
+          {filtered.map(reward => {
+            const canAfford = spending >= reward.price
+            const selected  = confirming?.id === reward.id
+            return (
+              <button key={reward.id}
+                onClick={() => { setConfirming(reward); setError('') }}
+                className="flex flex-col items-center gap-2 p-4 rounded-xl transition-all active:scale-95 text-center relative"
+                style={{
+                  background: selected ? 'rgba(192,132,252,0.1)' : 'var(--bg-surface)',
+                  border: `1px solid ${selected ? 'rgba(192,132,252,0.4)' : 'var(--border)'}`,
+                  opacity: canAfford ? 1 : 0.45,
+                }}>
+                <span className="text-4xl">{reward.emoji}</span>
+                <p className="text-xs font-mono font-semibold leading-tight" style={{ color: 'var(--text-primary)' }}>
+                  {reward.title}
+                </p>
+                <span className="text-xs font-mono font-bold"
+                  style={{ color: canAfford ? 'var(--positive)' : 'var(--text-dim)' }}>
+                  {fmt(reward.price)}
+                </span>
+              </button>
+            )
+          })}
+          {filtered.length === 0 && (
+            <p className="col-span-2 text-xs font-mono text-center py-8" style={{ color: 'var(--text-dim)' }}>
+              No rewards in this category
+            </p>
+          )}
+        </div>
+      </div>
+
+      {/* Confirm bar — slides up when a reward is selected */}
+      {confirming && (
+        <div className="px-4 py-4 shrink-0 flex flex-col gap-2" style={{ borderTop: '1px solid var(--border)', background: 'var(--bg-surface)' }}>
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <span className="text-2xl">{confirming.emoji}</span>
+              <div>
+                <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>{confirming.title}</p>
+                <p className="text-xs font-mono" style={{ color: spending >= confirming.price ? 'var(--positive)' : 'var(--negative)' }}>
+                  {fmt(confirming.price)} · wallet {fmt(spending)} → {fmt(spending - confirming.price)}
+                </p>
+              </div>
+            </div>
+            <button onClick={() => setConfirming(null)} style={{ color: 'var(--text-muted)', background: 'none', border: 'none' }}>
+              <X size={16} />
+            </button>
+          </div>
+          {error && <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{error}</p>}
+          <button onClick={handleBuy} disabled={busy || spending < confirming.price}
+            className="w-full py-3 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
+            style={{
+              background: spending >= confirming.price ? 'rgba(192,132,252,0.15)' : 'var(--bg-raised)',
+              border: `1px solid ${spending >= confirming.price ? 'rgba(192,132,252,0.4)' : 'var(--border)'}`,
+              color: spending >= confirming.price ? '#c084fc' : 'var(--text-dim)',
+              opacity: busy ? 0.6 : 1,
+            }}>
+            {busy ? 'Processing…' : spending < confirming.price ? `Need ${fmt(confirming.price - spending)} more` : `Buy for ${child.name}`}
+          </button>
+        </div>
+      )}
+    </div>
+  )
+}
+
 export default function ChildDetail() {
   const { memberId }  = useParams()
   const navigate      = useNavigate()
@@ -102,6 +236,7 @@ export default function ChildDetail() {
   const [allTxs,        setAllTxs]        = useState([])
 
   const [showNetWorth,  setShowNetWorth]  = useState(false)
+  const [showBuyReward, setShowBuyReward] = useState(false)
 
   // Parent-direct money actions
   const [activeSheet,   setActiveSheet]   = useState(null) // 'donate'|'savingsToWallet'|'walletToSavings'|'walletWithdraw'|'subGoalDeposit'|'subGoalWithdraw'
@@ -404,7 +539,7 @@ export default function ChildDetail() {
               { id: 'buyReward',        label: 'Buy Reward',        icon: <ShoppingBag size={13} />,      color: '#c084fc',             disabled: (accounts.spending ?? 0) <= 0 },
             ].map(({ id, label, icon, color, disabled }) => (
               <button key={id}
-                onClick={() => openSheet(id)}
+                onClick={() => id === 'buyReward' ? setShowBuyReward(true) : openSheet(id)}
                 disabled={disabled}
                 className="flex items-center gap-2 px-3 py-2.5 rounded-xl text-left transition-all active:scale-95"
                 style={{ background: 'var(--bg-surface)', border: '1px solid var(--border)', opacity: disabled ? 0.4 : 1 }}>
@@ -874,52 +1009,6 @@ export default function ChildDetail() {
               </div>
             </>}
 
-            {/* Buy Reward for child */}
-            {activeSheet === 'buyReward' && <>
-              <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>🛍 Buy Reward for {child.name}</p>
-              <p className="text-xs font-mono" style={{ color: 'var(--text-muted)' }}>Wallet: {fmt(accounts.spending ?? 0)}</p>
-              <div className="flex flex-col gap-2 max-h-48 overflow-y-auto">
-                {rewards.filter(r => r.isActive).map(r => {
-                  const canAfford = (accounts.spending ?? 0) >= r.price
-                  const selected  = sheetNote === r.id
-                  return (
-                    <button key={r.id} onClick={() => { setSheetNote(r.id); setSheetAmount(String(r.price)) }}
-                      className="flex items-center gap-3 px-3 py-2 rounded-xl transition-all"
-                      style={{
-                        background: selected ? 'rgba(192,132,252,0.1)' : 'var(--bg-raised)',
-                        border: `1px solid ${selected ? 'rgba(192,132,252,0.4)' : 'var(--border)'}`,
-                        opacity: canAfford ? 1 : 0.4,
-                      }}>
-                      <span className="text-xl">{r.emoji}</span>
-                      <span className="text-xs font-mono flex-1 text-left" style={{ color: 'var(--text-primary)' }}>{r.title}</span>
-                      <span className="text-xs font-mono font-semibold" style={{ color: '#c084fc' }}>{fmt(r.price)}</span>
-                    </button>
-                  )
-                })}
-              </div>
-              {actionError && <p className="text-xs font-mono" style={{ color: 'var(--negative)' }}>{actionError}</p>}
-              <div className="flex gap-2">
-                <button onClick={closeSheet} className="flex-1 py-2.5 rounded-xl text-sm font-mono" style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>Cancel</button>
-                <button
-                  disabled={!sheetNote || busy}
-                  onClick={async () => {
-                    if (!sheetNote) return
-                    const reward = rewards.find(r => r.id === sheetNote)
-                    if (!reward) return
-                    setBusy(true); setActionError(null)
-                    try {
-                      await parentBuyReward(child.id, reward.id, reward.title, reward.price)
-                      await reload(); closeSheet()
-                    } catch (e) { setActionError(e.message) }
-                    finally { setBusy(false) }
-                  }}
-                  className="flex-1 py-2.5 rounded-xl text-sm font-mono font-semibold active:scale-95"
-                  style={{ background: 'rgba(192,132,252,0.15)', color: '#c084fc', border: '1px solid rgba(192,132,252,0.3)', opacity: !sheetNote || busy ? 0.5 : 1 }}>
-                  {busy ? 'Processing...' : 'Buy Now'}
-                </button>
-              </div>
-            </>}
-
             {/* Sub-goal Deposit */}
             {activeSheet === 'subGoalDeposit' && sheetSubGoal && <>
               <p className="text-sm font-mono font-semibold" style={{ color: 'var(--text-primary)' }}>Deposit → "{sheetSubGoal.name}"</p>
@@ -980,6 +1069,17 @@ export default function ChildDetail() {
 
           </div>
         </div>
+      )}
+
+      {/* Full-screen Buy Reward */}
+      {showBuyReward && (
+        <BuyRewardScreen
+          child={child}
+          rewards={rewards}
+          fmt={fmt}
+          onClose={() => setShowBuyReward(false)}
+          onDone={async () => { await reload(); setShowBuyReward(false) }}
+        />
       )}
 
       {/* Net worth breakdown sheet */}

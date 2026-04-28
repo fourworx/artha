@@ -1,7 +1,7 @@
 import { useState, useRef } from 'react'
 import { Download, Upload, AlertTriangle, CheckCircle, Cloud, FlaskConical } from 'lucide-react'
 import { addDays, subDays, parseISO, format, getDay } from 'date-fns'
-import { exportAllData, importAllData, getFamily, getMembers, getChores, getPayslipForPeriod, getMember, giveLoan, giveBonus, getRewards, transferSavingsToWallet, addTransaction, updateMemberAccounts } from '../../db/operations'
+import { exportAllData, importAllData, getFamily, getMembers, getChores, getPayslipForPeriod, getMember, giveLoan, giveBonus, getRewards, transferSavingsToWallet, addTransaction, updateMemberAccounts, parentDonate, parentDepositToSubGoal } from '../../db/operations'
 import { migrateToSupabase } from '../../db/migrate'
 import { runPayslip, settlePayslip } from '../../engine/payslip'
 import { supabase } from '../../db/supabase'
@@ -47,8 +47,8 @@ export default function Backup() {
         getMembers(FAMILY_ID),
         getChores(FAMILY_ID),
       ])
-      const tier2 = allMembers.filter(m => m.role === 'child' && m.tier >= 2)
-      if (!tier2.length) throw new Error('No Tier 2 children found.')
+      const tier2 = allMembers.filter(m => m.role === 'child')
+      if (!tier2.length) throw new Error('No children found.')
 
       const mandatoryChores = allChores.filter(c => c.isActive && c.type === 'mandatory')
       const bonusChores     = allChores.filter(c => c.isActive && c.type === 'bonus')
@@ -194,32 +194,66 @@ export default function Backup() {
               .limit(1)
           }
 
-          // Reward purchase: ~50% of periods if wallet has enough
-          const affordable = rewards.filter(r => r.cost <= (settled.accounts?.spending ?? 0))
-          if (affordable.length > 0 && Math.random() < 0.5) {
+          // Reward purchases: 1–2 per period, ~65% chance each attempt
+          // r.price is the mapped field (DB col is `cost`, mapped to `price`)
+          for (let attempt = 0; attempt < 2; attempt++) {
+            if (Math.random() > 0.65) break
+            const freshR    = await getMember(member.id)
+            const wallet    = freshR.accounts?.spending ?? 0
+            const affordable = rewards.filter(r => r.price > 0 && r.price <= wallet)
+            if (!affordable.length) break
             const reward  = affordable[Math.floor(Math.random() * affordable.length)]
             const buyDate = format(addDays(parseISO(periodStart), Math.floor(Math.random() * 6)), 'yyyy-MM-dd')
-            const fresh2  = await getMember(member.id)
-            if ((fresh2.accounts?.spending ?? 0) >= reward.cost) {
-              await updateMemberAccounts(member.id, {
-                ...fresh2.accounts,
-                spending: fresh2.accounts.spending - reward.cost,
-              })
-              await addTransaction({
-                id:          crypto.randomUUID(),
-                memberId:    member.id,
-                type:        'reward',
-                amount:      -reward.cost,
-                description: `Reward: ${reward.title}`,
-                date:        buyDate,
-                relatedId:   reward.id,
-              })
-            }
+            await updateMemberAccounts(member.id, {
+              ...freshR.accounts,
+              spending: wallet - reward.price,
+            })
+            await addTransaction({
+              id:          crypto.randomUUID(),
+              memberId:    member.id,
+              type:        'reward',
+              amount:      -reward.price,
+              description: `Reward: ${reward.title}`,
+              date:        buyDate,
+              relatedId:   reward.id,
+            })
           }
 
-          // Savings → wallet transfer: ~25% of periods if savings > 100
+          // Donation from philanthropy: ~30% of periods
+          const freshD = await getMember(member.id)
+          const philBal = freshD.accounts?.philanthropy ?? 0
+          if (philBal >= 20 && Math.random() < 0.30) {
+            const donateAmt   = Math.min(philBal, Math.round((10 + Math.random() * 30) / 5) * 5)
+            const charities   = ['Local food bank', 'Animal shelter', 'Tree planting drive', 'School supplies fund']
+            const charity     = charities[Math.floor(Math.random() * charities.length)]
+            const donateDate  = format(addDays(parseISO(periodStart), Math.floor(Math.random() * 6)), 'yyyy-MM-dd')
+            try {
+              await parentDonate(member.id, donateAmt, charity)
+              // Backdate the transaction
+              await supabase.from('transactions')
+                .update({ date: donateDate })
+                .eq('member_id', member.id)
+                .eq('type', 'donation')
+                .order('created_at', { ascending: false })
+                .limit(1)
+            } catch { /* skip if balance changed */ }
+          }
+
+          // Sub-goal deposit: ~25% of periods if member has sub-goals
+          const freshG = await getMember(member.id)
+          const subGoals = freshG.accounts?.subGoals ?? []
+          const incomplete = subGoals.filter(g => g.balance < g.target)
+          if (incomplete.length > 0 && (freshG.accounts?.spending ?? 0) >= 20 && Math.random() < 0.25) {
+            const sg       = incomplete[Math.floor(Math.random() * incomplete.length)]
+            const maxDep   = Math.min(sg.target - sg.balance, freshG.accounts.spending, 100)
+            const depAmt   = Math.round((Math.random() * maxDep + 10) / 5) * 5
+            try { await parentDepositToSubGoal(member.id, sg.id, Math.min(depAmt, maxDep)) }
+            catch { /* skip */ }
+          }
+
+          // Savings → wallet transfer: ~20% of periods if savings > 150
           const fresh3 = await getMember(member.id)
-          if ((fresh3.accounts?.savings ?? 0) > 100 && Math.random() < 0.25) {
+          if ((fresh3.accounts?.savings ?? 0) > 150 && Math.random() < 0.20) {
             const transferAmt = Math.round(Math.random() * 50 + 20)
             await transferSavingsToWallet(member.id, Math.min(transferAmt, fresh3.accounts.savings))
           }
