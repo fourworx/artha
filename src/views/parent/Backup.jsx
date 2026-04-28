@@ -1,5 +1,5 @@
 import { useState, useRef } from 'react'
-import { Download, Upload, AlertTriangle, CheckCircle, Cloud, FlaskConical } from 'lucide-react'
+import { Download, Upload, AlertTriangle, CheckCircle, Cloud, FlaskConical, Trash2 } from 'lucide-react'
 import { addDays, subDays, parseISO, format, getDay } from 'date-fns'
 import { exportAllData, importAllData, getFamily, getMembers, getChores, getPayslipForPeriod, getMember, giveLoan, giveBonus, getRewards, transferSavingsToWallet, addTransaction, updateMemberAccounts, parentDonate, parentDepositToSubGoal } from '../../db/operations'
 import { migrateToSupabase } from '../../db/migrate'
@@ -21,6 +21,46 @@ export default function Backup() {
   const [generating, setGenerating] = useState(false)
   const [genPeriods, setGenPeriods] = useState(4)
   const [genProgress, setGenProgress] = useState('')
+  const [resetting,  setResetting]  = useState(false)
+  const [confirmReset, setConfirmReset] = useState(false)
+
+  // ── Reset all history ────────────────────────────────────────────────────────
+  const handleReset = async () => {
+    setResetting(true)
+    setStatus(null)
+    try {
+      const members = await getMembers(FAMILY_ID)
+      const memberIds = members.map(m => m.id)
+
+      // Delete all transactional data in parallel
+      await Promise.all([
+        supabase.from('chore_logs').delete().in('member_id', memberIds),
+        supabase.from('transactions').delete().in('member_id', memberIds),
+        supabase.from('payslips').delete().in('member_id', memberIds),
+        supabase.from('utility_charges').delete().in('member_id', memberIds),
+        supabase.from('reward_requests').delete().in('member_id', memberIds),
+        supabase.from('member_requests').delete().in('member_id', memberIds),
+      ])
+
+      // Zero out all wallet balances for child members
+      const children = members.filter(m => m.role === 'child')
+      await Promise.all(children.map(m =>
+        updateMemberAccounts(m.id, {
+          spending:     0,
+          savings:      0,
+          philanthropy: 0,
+          subGoals:     (m.accounts?.subGoals ?? []).map(sg => ({ ...sg, balance: 0 })),
+        })
+      ))
+
+      await reload()
+      setConfirmReset(false)
+      setStatus({ type: 'ok', msg: 'History cleared. All wallets zeroed. Ready to regenerate.' })
+    } catch (e) {
+      setStatus({ type: 'error', msg: `Reset failed: ${e.message}` })
+    }
+    setResetting(false)
+  }
 
   // ── Migrate from local device → Supabase ────────────────────────────────────
   const handleMigrate = async () => {
@@ -541,7 +581,7 @@ export default function Backup() {
 
           <button
             onClick={handleGenerate}
-            disabled={generating}
+            disabled={generating || resetting}
             className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-mono font-semibold transition-all active:scale-95"
             style={{
               background: generating ? 'var(--bg-raised)' : 'rgba(168,85,247,0.15)',
@@ -551,6 +591,41 @@ export default function Backup() {
             <FlaskConical size={15} />
             {generating ? 'Generating...' : `Generate ${genPeriods} Period${genPeriods > 1 ? 's' : ''}`}
           </button>
+
+          {/* Reset history */}
+          {!confirmReset ? (
+            <button
+              onClick={() => setConfirmReset(true)}
+              disabled={generating || resetting}
+              className="w-full flex items-center justify-center gap-2 py-2.5 rounded-xl text-sm font-mono transition-all active:scale-95"
+              style={{
+                background: 'transparent',
+                border: '1px solid var(--border)',
+                color: 'var(--negative)',
+              }}>
+              <Trash2 size={14} />
+              Reset All History &amp; Wallets
+            </button>
+          ) : (
+            <div className="flex flex-col gap-2 p-3 rounded-xl"
+              style={{ background: 'rgba(239,68,68,0.08)', border: '1px solid rgba(239,68,68,0.3)' }}>
+              <p className="text-xs font-mono text-center" style={{ color: 'var(--negative)' }}>
+                This wipes all transactions, payslips, chore logs and zeros every wallet. Cannot be undone.
+              </p>
+              <div className="flex gap-2">
+                <button onClick={() => setConfirmReset(false)}
+                  className="flex-1 py-2 rounded-xl text-xs font-mono"
+                  style={{ background: 'var(--bg-raised)', color: 'var(--text-muted)', border: '1px solid var(--border)' }}>
+                  Cancel
+                </button>
+                <button onClick={handleReset} disabled={resetting}
+                  className="flex-1 py-2 rounded-xl text-xs font-mono font-semibold active:scale-95"
+                  style={{ background: 'rgba(239,68,68,0.15)', color: 'var(--negative)', border: '1px solid rgba(239,68,68,0.4)' }}>
+                  {resetting ? 'Resetting...' : 'Yes, wipe it'}
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Info footer */}
